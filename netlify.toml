@@ -1,5 +1,5 @@
 [build]
-  command = "npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && cd apps/web && pnpm exec prisma generate && pnpm run build"
+  command = "npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate && npm run build"
   publish = "apps/web/.next"
 
 [build.environment]
