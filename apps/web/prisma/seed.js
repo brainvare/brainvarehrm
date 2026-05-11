@@ -13,6 +13,25 @@ function hashPassword(password) {
 async function main() {
   console.log('🌱 Seeding BrainvareHRM database...\n');
 
+  // ─── Cleanup (idempotent reseed) ───
+  console.log('🧹 Clearing existing data...');
+  const tables = [
+    'xpTransaction', 'badgeAward', 'employeeLevel', 'badgeType',
+    'surveyResponse', 'survey', 'socialPost', 'wellnessProgram', 'travelRequest',
+    'asset', 'recognition', 'overtimeEntry', 'helpdeskTicket', 'expense',
+    'loan', 'loanRepayment', 'announcement',
+    'auditLog', 'user', 'letterIssue', 'letterTemplate', 'document',
+    'clearanceTask', 'exitCase', 'onboardingTask', 'payrollEntry', 'payrollRun',
+    'salaryStructure', 'leaveTransaction', 'leaveBalance', 'leaveType',
+    'attendanceRecord', 'shift', 'emergencyContact', 'employeeAddress',
+    'employee', 'holiday', 'grade', 'designation', 'location', 'department',
+    'policy', 'position', 'benefit', 'organization',
+  ];
+  for (const t of tables) {
+    try { await prisma[t].deleteMany({}); } catch {}
+  }
+  console.log('✅ Cleared\n');
+
   // ─── Organization ───
   const org = await prisma.organization.create({
     data: {
@@ -465,6 +484,272 @@ async function main() {
     });
   }
   console.log('✅ 4 users created');
+
+  // ─── Announcements ───
+  const announcements = [
+    { title: 'Welcome to Q2 2026!', content: 'New quarter, new goals. Let\'s make it count!', category: 'General', priority: 'NORMAL', isPinned: true },
+    { title: 'Holiday: Labour Day', content: 'Office will remain closed on May 1st.', category: 'Holiday', priority: 'HIGH', isPinned: false },
+    { title: 'New Health Insurance Provider', content: 'We\'ve switched to Star Health. Check benefits page for details.', category: 'Policy', priority: 'HIGH', isPinned: true },
+    { title: 'Town Hall Meeting', content: 'Quarterly town hall on May 20th at 4 PM. All hands required.', category: 'Event', priority: 'NORMAL' },
+    { title: 'POSH Training Mandatory', content: 'Complete the POSH module by May 31st.', category: 'Policy', priority: 'URGENT' },
+  ];
+  for (const a of announcements) {
+    await prisma.announcement.create({ data: { ...a, organizationId: org.id, authorName: 'HR Team' } });
+  }
+  console.log('✅ 5 announcements created');
+
+  // ─── Loans ───
+  const loanData = [
+    { empIdx: 2, type: 'SALARY_ADVANCE', amount: 50000, status: 'ACTIVE', tenure: 5, emi: 10000, reason: 'Medical emergency' },
+    { empIdx: 4, type: 'PERSONAL', amount: 200000, status: 'APPROVED', tenure: 24, emi: 9500, reason: 'Home renovation' },
+    { empIdx: 5, type: 'EMERGENCY', amount: 30000, status: 'PENDING', tenure: 3, emi: 10500, reason: 'Family medical' },
+    { empIdx: 7, type: 'VEHICLE', amount: 500000, status: 'ACTIVE', tenure: 36, emi: 16000, reason: 'Two-wheeler purchase' },
+  ];
+  for (const l of loanData) {
+    await prisma.loan.create({
+      data: {
+        employeeId: employees[l.empIdx].id,
+        organizationId: org.id,
+        type: l.type,
+        amount: l.amount,
+        emi: l.emi,
+        tenure: l.tenure,
+        status: l.status,
+        reason: l.reason,
+        disbursed: l.status === 'ACTIVE' ? l.amount : 0,
+        outstanding: l.status === 'ACTIVE' ? l.amount * 0.7 : l.amount,
+        repaid: l.status === 'ACTIVE' ? l.amount * 0.3 : 0,
+      },
+    });
+  }
+  console.log('✅ 4 loans created');
+
+  // ─── Expenses ───
+  const expenseData = [
+    { empIdx: 1, category: 'Travel', amount: 8500, description: 'Client visit Mumbai', status: 'APPROVED', receipt: true },
+    { empIdx: 2, category: 'Meals', amount: 1200, description: 'Team lunch', status: 'PENDING', receipt: true },
+    { empIdx: 3, category: 'Software', amount: 4500, description: 'Figma annual subscription', status: 'APPROVED', receipt: true },
+    { empIdx: 4, category: 'Equipment', amount: 15000, description: 'External monitor', status: 'PENDING', receipt: false },
+    { empIdx: 6, category: 'Travel', amount: 22000, description: 'Conference Delhi', status: 'APPROVED', receipt: true },
+    { empIdx: 8, category: 'Other', amount: 3000, description: 'Internet reimbursement', status: 'REJECTED', receipt: false },
+  ];
+  for (const e of expenseData) {
+    await prisma.expense.create({
+      data: {
+        employeeId: employees[e.empIdx].id, organizationId: org.id,
+        category: e.category, amount: e.amount, description: e.description,
+        status: e.status, receipt: e.receipt,
+      },
+    });
+  }
+  console.log('✅ 6 expenses created');
+
+  // ─── Helpdesk Tickets ───
+  const ticketData = [
+    { empIdx: 1, title: 'Laptop running slow', description: 'Browser hangs frequently', category: 'IT', priority: 'MEDIUM', status: 'IN_PROGRESS' },
+    { empIdx: 2, title: 'Payslip not generated', description: 'April payslip missing', category: 'Payroll', priority: 'HIGH', status: 'OPEN' },
+    { empIdx: 3, title: 'Update emergency contact', description: 'Need to change phone number', category: 'HR', priority: 'LOW', status: 'RESOLVED', resolution: 'Updated in profile' },
+    { empIdx: 5, title: 'Office WiFi unstable', description: 'Disconnects every 10 mins', category: 'IT', priority: 'HIGH', status: 'IN_PROGRESS' },
+    { empIdx: 7, title: 'Reimbursement query', description: 'Status of March travel claim', category: 'Finance', priority: 'MEDIUM', status: 'OPEN' },
+  ];
+  for (const t of ticketData) {
+    await prisma.helpdeskTicket.create({
+      data: {
+        title: t.title, description: t.description, category: t.category, priority: t.priority, status: t.status,
+        resolution: t.resolution, raisedById: employees[t.empIdx].id, organizationId: org.id,
+        resolvedAt: t.status === 'RESOLVED' ? new Date() : null,
+      },
+    });
+  }
+  console.log('✅ 5 helpdesk tickets created');
+
+  // ─── Overtime Entries ───
+  const otData = [
+    { empIdx: 1, hours: 4, rate: 500, status: 'APPROVED', reason: 'Sprint release' },
+    { empIdx: 2, hours: 3, rate: 600, status: 'PENDING', reason: 'Production hotfix' },
+    { empIdx: 4, hours: 6, rate: 450, status: 'APPROVED', reason: 'Weekend deployment' },
+    { empIdx: 6, hours: 2, rate: 500, status: 'PENDING', reason: 'Design review' },
+  ];
+  for (const o of otData) {
+    await prisma.overtimeEntry.create({
+      data: {
+        employeeId: employees[o.empIdx].id, organizationId: org.id,
+        date: new Date(Date.now() - Math.random() * 7 * 86400000),
+        hours: o.hours, rate: o.rate, amount: o.hours * o.rate, reason: o.reason, status: o.status,
+      },
+    });
+  }
+  console.log('✅ 4 overtime entries created');
+
+  // ─── Recognitions ───
+  const recogData = [
+    { from: 0, to: 1, badge: '🌟', message: 'Outstanding sprint delivery!', category: 'Excellence' },
+    { from: 1, to: 2, badge: '🚀', message: 'Saved the day with that hotfix.', category: 'Initiative' },
+    { from: 3, to: 4, badge: '🤝', message: 'Great cross-team collaboration.', category: 'Collaboration' },
+    { from: 2, to: 5, badge: '💡', message: 'Brilliant idea for the new dashboard.', category: 'Innovation' },
+    { from: 0, to: 3, badge: '👑', message: 'Exceptional leadership this quarter.', category: 'Leadership' },
+    { from: 5, to: 6, badge: '🎯', message: 'Crushed all your quarterly goals.', category: 'Excellence' },
+  ];
+  for (const r of recogData) {
+    await prisma.recognition.create({
+      data: {
+        fromEmployeeId: employees[r.from].id, toEmployeeId: employees[r.to].id,
+        organizationId: org.id, badge: r.badge, message: r.message, category: r.category,
+        likes: Math.floor(Math.random() * 20),
+      },
+    });
+  }
+  console.log('✅ 6 recognitions created');
+
+  // ─── Assets ───
+  const assetData = [
+    { name: 'MacBook Pro M3', category: 'Laptop', serialNo: 'MBP-2024-001', empIdx: 0, status: 'ASSIGNED', value: 220000 },
+    { name: 'MacBook Air M2', category: 'Laptop', serialNo: 'MBA-2024-002', empIdx: 1, status: 'ASSIGNED', value: 110000 },
+    { name: 'Dell XPS 15', category: 'Laptop', serialNo: 'DXP-2024-003', empIdx: 2, status: 'ASSIGNED', value: 145000 },
+    { name: 'LG UltraFine 27"', category: 'Monitor', serialNo: 'LG-27-004', empIdx: 0, status: 'ASSIGNED', value: 55000 },
+    { name: 'iPhone 15', category: 'Mobile', serialNo: 'IPH15-005', empIdx: 3, status: 'ASSIGNED', value: 80000 },
+    { name: 'Logitech MX Master', category: 'Accessory', serialNo: 'LOG-MX-006', empIdx: null, status: 'AVAILABLE', value: 9000 },
+    { name: 'Herman Miller Chair', category: 'Furniture', serialNo: 'HM-007', empIdx: null, status: 'MAINTENANCE', value: 75000 },
+    { name: 'iPad Pro', category: 'Mobile', serialNo: 'IPD-008', empIdx: null, status: 'AVAILABLE', value: 95000 },
+  ];
+  for (const a of assetData) {
+    await prisma.asset.create({
+      data: {
+        name: a.name, category: a.category, serialNo: a.serialNo, status: a.status,
+        organizationId: org.id, value: a.value,
+        assignedToId: a.empIdx !== null ? employees[a.empIdx].id : null,
+        purchaseDate: new Date(2024, 5, 1),
+      },
+    });
+  }
+  console.log('✅ 8 assets created');
+
+  // ─── Travel Requests ───
+  const travelData = [
+    { empIdx: 0, destination: 'Mumbai', purpose: 'Client meeting', days: 2, cost: 25000, status: 'APPROVED' },
+    { empIdx: 2, destination: 'Delhi', purpose: 'Conference', days: 3, cost: 40000, status: 'APPROVED' },
+    { empIdx: 4, destination: 'Singapore', purpose: 'Customer onboarding', days: 5, cost: 150000, status: 'PENDING' },
+    { empIdx: 5, destination: 'Hyderabad', purpose: 'Team offsite', days: 4, cost: 60000, status: 'COMPLETED' },
+  ];
+  for (const t of travelData) {
+    const start = new Date(Date.now() + Math.random() * 30 * 86400000);
+    await prisma.travelRequest.create({
+      data: {
+        employeeId: employees[t.empIdx].id, organizationId: org.id,
+        destination: t.destination, purpose: t.purpose,
+        startDate: start, endDate: new Date(start.getTime() + t.days * 86400000),
+        estimatedCost: t.cost, status: t.status,
+      },
+    });
+  }
+  console.log('✅ 4 travel requests created');
+
+  // ─── Wellness Programs ───
+  const wellnessData = [
+    { name: '10K Steps Challenge', type: 'Fitness', schedule: 'Daily, 30 days', status: 'ACTIVE', participants: 24, description: 'Walk 10,000 steps daily for a month' },
+    { name: 'Mindful Mondays', type: 'Mental Health', schedule: 'Every Monday, 9 AM', status: 'ACTIVE', participants: 18, description: 'Guided meditation sessions' },
+    { name: 'Yoga at Work', type: 'Fitness', schedule: 'Tue/Thu 7 AM', status: 'ACTIVE', participants: 12, description: 'On-site yoga classes' },
+    { name: 'Nutrition Workshop', type: 'Nutrition', schedule: 'May 25th, 3 PM', status: 'UPCOMING', participants: 0, description: 'Workplace nutrition by certified dietician' },
+    { name: 'Annual Health Checkup', type: 'Health', schedule: 'June 1-7', status: 'UPCOMING', participants: 0, description: 'Free full-body checkup for all employees' },
+  ];
+  for (const w of wellnessData) {
+    await prisma.wellnessProgram.create({ data: { ...w, organizationId: org.id } });
+  }
+  console.log('✅ 5 wellness programs created');
+
+  // ─── Social Posts ───
+  const postData = [
+    { empIdx: 0, content: 'Excited to join Brainvare! Looking forward to building great things with this team. 🚀', type: 'welcome' },
+    { empIdx: 1, content: 'Our team just shipped the new dashboard. Massive shoutout to everyone involved! 🎉', type: 'achievement' },
+    { empIdx: 3, content: 'Happy birthday Priya! 🎂 Wishing you an amazing year ahead.', type: 'celebration' },
+    { empIdx: 2, content: 'Anyone interested in joining the running club? We meet at Cubbon Park, Saturdays 6 AM.', type: 'post' },
+    { empIdx: 5, content: 'Reminder: Lunch and Learn this Friday — topic is "Scaling PostgreSQL". Don\'t miss it!', type: 'announcement' },
+    { empIdx: 4, content: 'Great brainstorming session with the design team today. Loving the new direction! 🎨', type: 'post' },
+  ];
+  for (const p of postData) {
+    const emp = employees[p.empIdx];
+    await prisma.socialPost.create({
+      data: {
+        organizationId: org.id, authorId: emp.id,
+        authorName: `${emp.firstName} ${emp.lastName}`,
+        content: p.content, type: p.type,
+        likes: Math.floor(Math.random() * 50),
+      },
+    });
+  }
+  console.log('✅ 6 social posts created');
+
+  // ─── Surveys ───
+  const surveyData = [
+    { title: 'Q2 Employee Engagement Pulse', description: 'Quick 5-min pulse on team morale.', status: 'ACTIVE', totalTargeted: 10 },
+    { title: 'WFH Policy Feedback', description: 'Help us refine the hybrid work policy.', status: 'ACTIVE', totalTargeted: 10 },
+    { title: 'Q1 Manager Effectiveness', description: 'Anonymous feedback on managers.', status: 'COMPLETED', totalTargeted: 10 },
+    { title: 'Office Amenities Survey', description: 'What would improve your office experience?', status: 'DRAFT', totalTargeted: 10 },
+  ];
+  for (const s of surveyData) {
+    await prisma.survey.create({
+      data: {
+        title: s.title, description: s.description, organizationId: org.id,
+        status: s.status, totalTargeted: s.totalTargeted, anonymous: true,
+        deadline: s.status === 'ACTIVE' ? new Date(Date.now() + 14 * 86400000) : null,
+      },
+    });
+  }
+  console.log('✅ 4 surveys created');
+
+  // ─── Gamification: Badge Types ───
+  const badgeData = [
+    { name: 'Streak Master', icon: '🔥', description: '30-day perfect attendance', xpReward: 100 },
+    { name: 'Goal Crusher', icon: '🎯', description: 'Completed all quarterly goals', xpReward: 50 },
+    { name: 'Knowledge Seeker', icon: '📚', description: 'Completed 10 courses', xpReward: 50 },
+    { name: 'Team Player', icon: '🤝', description: '50 peer recognitions given', xpReward: 75 },
+    { name: 'Wellness Warrior', icon: '💪', description: '5 wellness challenges done', xpReward: 50 },
+    { name: 'Quick Starter', icon: '🚀', description: 'Onboarded in 3 days', xpReward: 50 },
+    { name: 'Early Bird', icon: '🐦', description: 'In before 9 AM for 20 days', xpReward: 40 },
+    { name: 'Survey Star', icon: '📊', description: 'Completed 10 pulse surveys', xpReward: 25 },
+  ];
+  const badgeTypes = [];
+  for (const b of badgeData) {
+    const bt = await prisma.badgeType.create({ data: { ...b, organizationId: org.id } });
+    badgeTypes.push(bt);
+  }
+  console.log('✅ 8 badge types created');
+
+  // ─── Badge Awards ───
+  const awardsToCreate = [
+    [0, 0], [0, 1], [0, 6], [1, 0], [1, 1], [2, 2], [2, 7], [3, 1], [3, 3], [4, 5],
+  ];
+  for (const [empIdx, badgeIdx] of awardsToCreate) {
+    await prisma.badgeAward.create({
+      data: { employeeId: employees[empIdx].id, badgeTypeId: badgeTypes[badgeIdx].id },
+    });
+  }
+  console.log('✅ 10 badge awards created');
+
+  // ─── XP Transactions & Employee Levels ───
+  for (let i = 0; i < employees.length; i++) {
+    const baseXp = [4200, 3850, 2680, 3600, 2400, 1900, 2100, 1500, 1200, 1000][i] || 500;
+    await prisma.employeeLevel.create({
+      data: {
+        employeeId: employees[i].id, organizationId: org.id,
+        level: Math.floor(baseXp / 250) + 1, xp: baseXp,
+        streak: Math.floor(Math.random() * 20) + 1, rank: i + 1,
+      },
+    });
+    const txns = [
+      { amount: 5, action: 'ATTENDANCE', description: 'Clock-in on time' },
+      { amount: 10, action: 'TRAINING', description: 'Course completed' },
+      { amount: 25, action: 'BADGE', description: 'Earned a badge' },
+      { amount: 3, action: 'SOCIAL', description: 'Gave recognition' },
+    ];
+    for (const tx of txns) {
+      await prisma.xpTransaction.create({
+        data: { ...tx, employeeId: employees[i].id },
+      });
+    }
+  }
+  console.log('✅ Levels + XP transactions created for all employees');
+
   console.log('\n🎉 Seeding complete!\n');
   console.log('Login credentials:');
   console.log('  admin@brainvare.com / admin123 (Super Admin)');

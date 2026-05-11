@@ -1,25 +1,25 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, FunctionCallingMode } from '@google/generative-ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { aiToolDeclarations, aiToolHandlers } from '@/lib/ai-tools';
 
-const SYSTEM_PROMPT = `You are BrainvareHRM AI Assistant — a helpful, professional HR copilot built into the BrainvareHRM platform. You help HR managers, employees, and admins with:
+const SYSTEM_PROMPT = `You are BrainvareHRM AI Copilot — an agentic HR assistant with full read/write access to the BrainvareHRM database via tool calls.
 
-1. **Policy Questions**: Answer questions about leave policy, attendance rules, dress code, WFH guidelines, etc.
-2. **Letter Drafting**: Draft offer letters, appointment letters, warning letters, experience letters, appraisal letters, etc.
-3. **HR Calculations**: Calculate CTC breakdowns, gratuity, PF contributions, leave encashment, overtime pay, etc.
-4. **Compliance Guidance**: Indian labor law guidance (Shops & Establishments Act, PF Act, ESI, Gratuity, etc.)
-5. **Employee Queries**: Help with common employee questions about benefits, payroll, leave balance, etc.
-6. **Recruitment**: Help draft job descriptions, interview questions, evaluation criteria.
-7. **Performance Reviews**: Suggest review comments, goals, KPIs for different roles.
-8. **Data Analysis**: Help interpret HR metrics like attrition rate, absenteeism, cost per hire, etc.
+You can:
+- **READ**: list employees, departments, leaves, helpdesk tickets, expenses, loans, assets, announcements, policies; get org stats.
+- **WRITE**: create announcements, policies, helpdesk tickets, loans, assets, recognitions, surveys, wellness programs, social posts, travel requests, overtime entries; approve/reject leaves & expenses; assign assets; award XP.
 
-Guidelines:
-- Be concise but thorough.
-- Use bullet points and structured formatting when helpful.
-- For legal/compliance questions, always add a disclaimer to verify with a qualified professional.
-- Use Indian HR context (INR, Indian labor laws, statutory compliance) as default.
-- Be warm and professional — represent the BrainvareHRM brand.
-- If asked to draft a letter, produce a complete, professional document ready to use.
-- For calculations, show the formula and step-by-step working.`;
+Operating principles:
+1. **Be agentic.** When the user asks you to do something, call the right tools immediately. Don't just describe what you'd do.
+2. **Chain tools.** If a task needs an employee lookup followed by an action, do both — don't ask the user to give you an employee ID.
+3. **Confirm destructive ops** in plain English ("I'll reject leave request #XYZ — proceed?") only when the user's intent is ambiguous; otherwise act.
+4. **Report results** clearly: state what you did, the IDs created, and any errors.
+5. **Indian HR context**: INR currency, Indian labor laws, statutory compliance defaults.
+6. **For policy/legal questions** without tool calls, answer concisely with a disclaimer to verify with a qualified professional.
+7. **For letters / JDs / calculations** — produce complete, professional output ready to use.
+
+Be concise, decisive, and helpful. The user is an HR admin who values speed.`;
+
+const MAX_TOOL_LOOPS = 5;
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,22 +32,24 @@ export async function POST(request: NextRequest) {
     }
 
     const { messages, mode } = await request.json();
-
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Try multiple models for resilience
-    const models = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
     let lastError = '';
+    const actions: Array<{ tool: string; args: any; result: any }> = [];
 
     for (const modelName of models) {
       try {
+        const useTools = !mode || mode === 'general' || mode === 'agent';
+
         const model = genAI.getGenerativeModel({
           model: modelName,
           systemInstruction: SYSTEM_PROMPT,
+          tools: useTools ? [{ functionDeclarations: aiToolDeclarations }] : undefined,
+          toolConfig: useTools ? { functionCallingConfig: { mode: FunctionCallingMode.AUTO } } : undefined,
         });
 
         const history = messages.slice(0, -1).map((msg: { role: string; content: string }) => ({
@@ -59,21 +61,41 @@ export async function POST(request: NextRequest) {
         const lastMessage = messages[messages.length - 1].content;
 
         let prompt = lastMessage;
-        if (mode === 'letter') {
-          prompt = `Draft a professional HR letter based on this request. Use formal business letter formatting with date, reference, subject, body, and signature block. Request: ${lastMessage}`;
-        } else if (mode === 'calculate') {
-          prompt = `Perform this HR/payroll calculation. Show the formula, inputs, step-by-step working, and final result clearly. Question: ${lastMessage}`;
-        } else if (mode === 'policy') {
-          prompt = `Answer this HR policy question based on standard Indian corporate HR practices. Be specific and cite relevant labor laws if applicable. Question: ${lastMessage}`;
-        } else if (mode === 'jd') {
-          prompt = `Draft a professional job description with these sections: About the Role, Key Responsibilities, Requirements, Nice-to-Haves, and What We Offer. Request: ${lastMessage}`;
-        } else if (mode === 'insights') {
-          prompt = `Analyze this HR data and provide actionable insights with recommendations. Data: ${lastMessage}`;
+        if (mode === 'letter') prompt = `Draft a professional HR letter. Use formal letter formatting (date, ref, subject, body, signature). Request: ${lastMessage}`;
+        else if (mode === 'calculate') prompt = `Perform this HR/payroll calculation. Show formula, inputs, step-by-step working, final result. Question: ${lastMessage}`;
+        else if (mode === 'policy') prompt = `Answer this HR policy question based on Indian corporate HR practices. Cite labor laws if applicable. Question: ${lastMessage}`;
+        else if (mode === 'jd') prompt = `Draft a job description with: About the Role, Key Responsibilities, Requirements, Nice-to-Haves, What We Offer. Request: ${lastMessage}`;
+        else if (mode === 'insights') prompt = `Analyze this HR data and provide actionable insights. Data: ${lastMessage}`;
+
+        let result = await chat.sendMessage(prompt);
+
+        for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
+          const calls = result.response.functionCalls();
+          if (!calls || calls.length === 0) break;
+
+          const responses = await Promise.all(
+            calls.map(async (call) => {
+              const handler = aiToolHandlers[call.name];
+              let toolResult: any;
+              if (!handler) {
+                toolResult = { error: `Unknown tool: ${call.name}` };
+              } else {
+                try {
+                  toolResult = await handler(call.args || {});
+                } catch (e: any) {
+                  toolResult = { error: e.message || 'Tool execution failed' };
+                }
+              }
+              actions.push({ tool: call.name, args: call.args, result: toolResult });
+              return { functionResponse: { name: call.name, response: { result: toolResult } } };
+            })
+          );
+
+          result = await chat.sendMessage(responses);
         }
 
-        const result = await chat.sendMessage(prompt);
         const response = result.response.text();
-        return NextResponse.json({ response });
+        return NextResponse.json({ response, actions });
       } catch (e: any) {
         lastError = e.message || 'Unknown error';
         console.error(`Model ${modelName} failed:`, lastError);
@@ -81,12 +103,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ error: `All AI models failed. Last error: ${lastError}. Your API key may have exceeded its quota — visit https://aistudio.google.com/apikey to check.` }, { status: 429 });
+    return NextResponse.json({
+      error: `All AI models failed. Last error: ${lastError}. Your API key may have exceeded its quota — visit https://aistudio.google.com/apikey to check.`,
+    }, { status: 429 });
   } catch (error: any) {
     console.error('Gemini API error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get AI response' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || 'Failed to get AI response' }, { status: 500 });
   }
 }

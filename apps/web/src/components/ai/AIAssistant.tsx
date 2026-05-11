@@ -3,16 +3,19 @@
 import { useState, useRef, useEffect } from 'react';
 import styles from './AIAssistant.module.css';
 
+type Action = { tool: string; args: any; result: any };
+
 type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  actions?: Action[];
 };
 
-type AIMode = 'general' | 'letter' | 'calculate' | 'policy' | 'jd' | 'insights';
+type AIMode = 'agent' | 'letter' | 'calculate' | 'policy' | 'jd' | 'insights';
 
 const modeConfig: Record<AIMode, { label: string; icon: string; placeholder: string }> = {
-  general: { label: 'General', icon: '💬', placeholder: 'Ask me anything about HR...' },
+  agent: { label: 'Agent', icon: '🤖', placeholder: 'Tell me what to do — e.g. "Create an announcement about the May 20 town hall"' },
   letter: { label: 'Draft Letter', icon: '✉️', placeholder: 'e.g. "Draft an offer letter for Frontend Dev at ₹12L CTC"' },
   calculate: { label: 'Calculate', icon: '🧮', placeholder: 'e.g. "Calculate gratuity for 5 years, last salary ₹80K"' },
   policy: { label: 'Policy Q&A', icon: '📜', placeholder: 'e.g. "What is the maternity leave policy?"' },
@@ -23,11 +26,11 @@ const modeConfig: Record<AIMode, { label: string; icon: string; placeholder: str
 export default function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: '👋 Hi! I\'m **BrainvareHRM AI** powered by Gemini Flash. I can help you with:\n\n• 📜 **Policy questions** — leave, attendance, WFH rules\n• ✉️ **Letter drafting** — offer, appointment, warning, experience\n• 🧮 **HR calculations** — CTC, gratuity, PF, overtime\n• 📋 **Job descriptions** — role-specific JDs\n• 📊 **Data insights** — interpret HR metrics\n\nHow can I help you today?', timestamp: new Date() },
+    { role: 'assistant', content: '👋 Hi! I\'m **BrainvareHRM AI Copilot** — I can actually *do* things in this software for you.\n\n**Try saying:**\n• "Post an announcement about the May 20 town hall"\n• "Show me all pending leave requests"\n• "Approve the latest expense from Karan"\n• "Give Sneha 50 XP for sprint delivery"\n• "Create a wellness program for yoga every Tuesday"\n• "Raise an IT helpdesk ticket for Rahul about a slow laptop"\n\nOr ask policy/letter/calc questions via the mode selector below.', timestamp: new Date() },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<AIMode>('general');
+  const [mode, setMode] = useState<AIMode>('agent');
   const [showModes, setShowModes] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +66,7 @@ export default function AIAssistant() {
           : `⚠️ ${data.error}`;
         setMessages(prev => [...prev, { role: 'assistant', content: errorMsg, timestamp: new Date() }]);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: new Date() }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: new Date(), actions: data.actions }]);
       }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Network error. Please try again.', timestamp: new Date() }]);
@@ -130,6 +133,22 @@ export default function AIAssistant() {
               <div key={i} className={styles.message} data-role={msg.role}>
                 <div className={styles.msgBubble}>
                   <div className={styles.msgContent} dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }} />
+                  {msg.actions && msg.actions.length > 0 && (
+                    <div className={styles.actionsList}>
+                      {msg.actions.map((a, j) => (
+                        <div key={j} className={styles.actionItem} data-error={!!a.result?.error}>
+                          <span className={styles.actionTool}>⚡ {a.tool}</span>
+                          <span className={styles.actionResult}>
+                            {a.result?.error
+                              ? `Error: ${a.result.error}`
+                              : Array.isArray(a.result)
+                                ? `${a.result.length} result(s)`
+                                : a.result?.ok ? '✓ Done' : 'Done'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <span className={styles.msgTime}>{msg.timestamp.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
