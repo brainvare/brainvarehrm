@@ -1,6 +1,7 @@
 [build]
-  command = "npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate && npm run build"
-  publish = "apps/web/.next"
+  command = "cd ../.. && npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate --schema=./prisma/schema.prisma && pnpm run build"
+  publish = ".next"
+  base = "apps/web"
 
 [build.environment]
   NODE_VERSION = "20"

@@ -1,0 +1,35 @@
+headers = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[[plugins]]
+origin = "config"
+package = "@netlify/plugin-nextjs"
+
+[plugins.inputs]
+
+[build]
+publish = "/Users/brainvare/BrainvareHRM/apps/web/apps/web/.next"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "/Users/brainvare/BrainvareHRM/apps/web"
+command = "npm install -g pnpm@9 && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate && npm run build"
+
+[build.environment]
+NODE_VERSION = "20"
+NEXT_TELEMETRY_DISABLED = "1"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
