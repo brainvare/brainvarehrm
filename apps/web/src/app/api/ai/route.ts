@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+    const models = ['gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
     let lastError = '';
     const actions: Array<{ tool: string; args: any; result: any }> = [];
 
@@ -52,10 +52,12 @@ export async function POST(request: NextRequest) {
           toolConfig: useTools ? { functionCallingConfig: { mode: FunctionCallingMode.AUTO } } : undefined,
         });
 
-        const history = messages.slice(0, -1).map((msg: { role: string; content: string }) => ({
+        const rawHistory = messages.slice(0, -1).map((msg: { role: string; content: string }) => ({
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }],
         }));
+        const firstUserIdx = rawHistory.findIndex((h: any) => h.role === 'user');
+        const history = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
 
         const chat = model.startChat({ history });
         const lastMessage = messages[messages.length - 1].content;
