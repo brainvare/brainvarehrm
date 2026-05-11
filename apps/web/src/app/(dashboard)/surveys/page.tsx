@@ -1,17 +1,12 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'surveys' | 'enps' | 'feedback';
 
 export default function SurveysPage() {
   const [tab, setTab] = useState<Tab>('surveys');
-  const [surveys, setSurveys] = useState([
-    { id: '1', title: 'Weekly Pulse Check — Week 16', type: 'PULSE', status: 'ACTIVE', responses: 8, total: 10, endsAt: '2026-04-21', isAnonymous: true, questions: 5 },
-    { id: '2', title: 'Q1 2026 Engagement Survey', type: 'ENGAGEMENT', status: 'CLOSED', responses: 10, total: 10, endsAt: '2026-03-31', isAnonymous: true, questions: 15 },
-    { id: '3', title: 'eNPS Survey — April 2026', type: 'ENPS', status: 'ACTIVE', responses: 6, total: 10, endsAt: '2026-04-25', isAnonymous: true, questions: 3 },
-    { id: '4', title: 'New Joiner Feedback', type: 'ONBOARDING', status: 'DRAFT', responses: 0, total: 2, endsAt: '2026-05-01', isAnonymous: false, questions: 8 },
-  ]);
+  const [surveys, setSurveys] = useState<any[]>([]);
   const [feedback, setFeedback] = useState([
     { id: '1', category: 'SUGGESTION', preview: 'It would be great to have flexible work hours on Fridays...', status: 'NEW', date: '2026-04-18' },
     { id: '2', category: 'GRIEVANCE', preview: 'The air conditioning in the 3rd floor meeting rooms has been...', status: 'IN_PROGRESS', date: '2026-04-15' },
@@ -30,10 +25,14 @@ export default function SurveysPage() {
   const typeClr = (t: string) => t === 'PULSE' ? 'var(--color-primary-400)' : t === 'ENGAGEMENT' ? '#a78bfa' : t === 'ENPS' ? 'var(--color-accent-400)' : 'var(--color-warning-400)';
   const statusClr = (s: string) => s === 'ACTIVE' || s === 'REVIEWED' ? 'var(--color-accent-400)' : s === 'DRAFT' || s === 'NEW' ? 'var(--color-primary-400)' : s === 'IN_PROGRESS' ? 'var(--color-warning-400)' : 'var(--text-muted)';
 
-  const handleCreate = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; setSurveys([{ id: Date.now().toString(), title: (f.elements.namedItem('title') as HTMLInputElement).value, type: (f.elements.namedItem('type') as HTMLSelectElement).value, status: 'DRAFT', responses: 0, total: parseInt((f.elements.namedItem('total') as HTMLInputElement).value) || 10, endsAt: (f.elements.namedItem('endsAt') as HTMLInputElement).value, isAnonymous: true, questions: parseInt((f.elements.namedItem('questions') as HTMLInputElement).value) || 5 }, ...surveys]); setShowCreate(false); toast('Survey created!', 'success'); };
-  const saveEdits = () => { setSurveys(surveys.map(s => s.id === showDetail.id ? { ...s, ...editData } : s)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  useEffect(() => {
+    fetch('/api/surveys').then(r => r.json()).then(d => setSurveys(d.data || [])).catch(() => {});
+  }, []);
+
+  const handleCreate = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const r = await fetch('/api/surveys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: (f.elements.namedItem('title') as HTMLInputElement).value, type: (f.elements.namedItem('type') as HTMLSelectElement).value, endsAt: (f.elements.namedItem('endsAt') as HTMLInputElement).value, isAnonymous: true }) }); if (r.ok) { const s = await r.json(); setSurveys([s, ...surveys]); setShowCreate(false); toast('Survey created!', 'success'); } else toast('Failed', 'error'); };
+  const saveEdits = async () => { const r = await fetch('/api/surveys', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status }) }); if (r.ok) { const updated = await r.json(); setSurveys(surveys.map(s => s.id === updated.id ? updated : s)); setShowDetail(updated); setEditing(false); toast('Updated!', 'success'); } };
   const deleteSurvey = (id: string) => { setSurveys(surveys.filter(s => s.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Survey deleted', 'success'); };
-  const changeStatus = (id: string, status: string) => { setSurveys(surveys.map(s => s.id === id ? { ...s, status } : s)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`Status → ${status}`, 'success'); };
+  const changeStatus = async (id: string, status: string) => { const r = await fetch('/api/surveys', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); if (r.ok) { const updated = await r.json(); setSurveys(surveys.map(s => s.id === id ? updated : s)); if (showDetail?.id === id) setShowDetail(updated); toast(`Status → ${status}`, 'success'); } };
   const handleFeedback = () => { if (!feedbackText.trim()) return; setFeedback([{ id: Date.now().toString(), category: feedbackCategory, preview: feedbackText, status: 'NEW', date: new Date().toISOString().split('T')[0] }, ...feedback]); setFeedbackText(''); toast('Feedback submitted anonymously!', 'success'); };
   const updateFeedbackStatus = (id: string, status: string) => { setFeedback(feedback.map(f => f.id === id ? { ...f, status } : f)); if (showFeedbackDetail?.id === id) setShowFeedbackDetail({ ...showFeedbackDetail, status }); toast(`Updated → ${status}`, 'success'); };
 

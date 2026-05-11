@@ -1,22 +1,21 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'active' | 'apply' | 'types';
 
+const LOAN_TYPES = [
+  { id: 'salary-advance', name: 'Salary Advance', maxAmount: 100000, maxTenure: 3, interest: 0, icon: '💰' },
+  { id: 'personal-loan', name: 'Personal Loan', maxAmount: 500000, maxTenure: 24, interest: 8.5, icon: '🏦' },
+  { id: 'emergency-fund', name: 'Emergency Fund', maxAmount: 50000, maxTenure: 6, interest: 0, icon: '🚨' },
+  { id: 'education-loan', name: 'Education Loan', maxAmount: 200000, maxTenure: 36, interest: 6, icon: '📚' },
+];
+
 export default function LoansPage() {
   const [tab, setTab] = useState<Tab>('active');
-  const [loans, setLoans] = useState([
-    { id: '1', type: 'Personal Loan', employee: 'Rahul Sharma', amount: 200000, emi: 9167, tenure: 24, paidEmis: 8, outstanding: 146672, status: 'ACTIVE', startDate: '2025-08-01', interest: 8.5, notes: '' },
-    { id: '2', type: 'Salary Advance', employee: 'Meera Nair', amount: 30000, emi: 10000, tenure: 3, paidEmis: 2, outstanding: 10000, status: 'ACTIVE', startDate: '2026-02-01', interest: 0, notes: '' },
-    { id: '3', type: 'Emergency Fund', employee: 'Arjun Desai', amount: 25000, emi: 4167, tenure: 6, paidEmis: 6, outstanding: 0, status: 'CLOSED', startDate: '2025-10-01', interest: 0, notes: '' },
-  ]);
-  const [loanTypes] = useState([
-    { id: '1', name: 'Salary Advance', maxAmount: 100000, maxTenure: 3, interest: 0, icon: '💰' },
-    { id: '2', name: 'Personal Loan', maxAmount: 500000, maxTenure: 24, interest: 8.5, icon: '🏦' },
-    { id: '3', name: 'Emergency Fund', maxAmount: 50000, maxTenure: 6, interest: 0, icon: '🚨' },
-    { id: '4', name: 'Education Loan', maxAmount: 200000, maxTenure: 36, interest: 6, icon: '📚' },
-  ]);
+  const [loans, setLoans] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const loanTypes = LOAN_TYPES;
   const [showApply, setShowApply] = useState(false);
   const [applyType, setApplyType] = useState<any>(null);
   const [showDetail, setShowDetail] = useState<any>(null);
@@ -24,19 +23,31 @@ export default function LoansPage() {
   const [editData, setEditData] = useState<any>({});
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
 
-  const fm = (n: number) => `₹${n.toLocaleString('en-IN')}`;
-  const stats = { active: loans.filter(l => l.status === 'ACTIVE').length, outstanding: loans.filter(l => l.status === 'ACTIVE').reduce((s, l) => s + l.outstanding, 0), closed: loans.filter(l => l.status === 'CLOSED').length, monthlyEmi: loans.filter(l => l.status === 'ACTIVE').reduce((s, l) => s + l.emi, 0) };
+  useEffect(() => {
+    fetch('/api/loans').then(r => r.json()).then(d => setLoans(d.data || [])).catch(() => {});
+    fetch('/api/master-data').then(r => r.json()).then(d => setEmployees(d.employees || [])).catch(() => {});
+  }, []);
 
-  const handleApply = (e: any) => {
+  const fm = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+  const stats = { active: loans.filter(l => l.status === 'ACTIVE').length, outstanding: loans.filter(l => l.status === 'ACTIVE').reduce((s, l) => s + (l.outstanding || l.amount || 0), 0), closed: loans.filter(l => l.status === 'CLOSED').length, monthlyEmi: loans.filter(l => l.status === 'ACTIVE').reduce((s, l) => s + (l.emi || 0), 0) };
+
+  const handleApply = async (e: any) => {
     e.preventDefault(); const f = e.target as HTMLFormElement;
-    const amount = parseInt((f.elements.namedItem('amount') as HTMLInputElement).value);
+    const employeeId = (f.elements.namedItem('employeeId') as HTMLSelectElement).value;
+    const amount = parseFloat((f.elements.namedItem('amount') as HTMLInputElement).value);
     const tenure = parseInt((f.elements.namedItem('tenure') as HTMLInputElement).value);
-    const emi = Math.ceil(amount / tenure);
-    const loan = { id: Date.now().toString(), type: applyType.name, employee: (f.elements.namedItem('employee') as HTMLInputElement).value, amount, emi, tenure, paidEmis: 0, outstanding: amount, status: 'PENDING', startDate: (f.elements.namedItem('startDate') as HTMLInputElement).value, interest: applyType.interest, notes: (f.elements.namedItem('notes') as HTMLInputElement)?.value || '' };
-    setLoans([loan, ...loans]); setShowApply(false); setApplyType(null); toast('Loan application submitted!', 'success');
+    const startDate = (f.elements.namedItem('startDate') as HTMLInputElement).value;
+    const notes = (f.elements.namedItem('notes') as HTMLTextAreaElement)?.value || '';
+    const r = await fetch('/api/loans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId, loanType: applyType.name, amount, tenure, interestRate: applyType.interest, disbursementDate: startDate, notes }) });
+    if (r.ok) { const loan = await r.json(); setLoans([loan, ...loans]); setShowApply(false); setApplyType(null); toast('Loan application submitted!', 'success'); }
+    else toast('Failed to submit', 'error');
   };
 
-  const saveEdits = () => { setLoans(loans.map(l => l.id === showDetail.id ? { ...l, ...editData } : l)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  const saveEdits = async () => {
+    const r = await fetch('/api/loans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status }) });
+    if (r.ok) { const updated = await r.json(); setLoans(loans.map(l => l.id === updated.id ? updated : l)); setShowDetail(updated); setEditing(false); toast('Updated!', 'success'); }
+    else toast('Failed to update', 'error');
+  };
   const deleteLoan = (id: string) => { setLoans(loans.filter(l => l.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Loan removed', 'success'); };
   const statusClr = (s: string) => s === 'ACTIVE' ? 'var(--color-accent-400)' : s === 'PENDING' ? 'var(--color-warning-400)' : s === 'CLOSED' ? 'var(--text-muted)' : 'var(--color-danger-400)';
 
@@ -122,7 +133,7 @@ export default function LoansPage() {
         <div className="modal-header"><h2>Apply: {applyType.name}</h2><button onClick={() => setShowApply(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button></div>
         <form className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleApply}>
           <div style={{ padding: 'var(--space-3)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Max Amount: {fm(applyType.maxAmount)} · Max Tenure: {applyType.maxTenure} months · Interest: {applyType.interest === 0 ? 'None' : `${applyType.interest}%`}</div>
-          <div><label className="input-label">Employee Name *</label><input className="input-field" name="employee" required placeholder="Sneha Reddy" /></div>
+          <div><label className="input-label">Employee *</label><select className="input-field" name="employeeId" required><option value="">Select employee...</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div><label className="input-label">Amount (₹) *</label><input className="input-field" name="amount" type="number" required max={applyType.maxAmount} placeholder={`Max ${applyType.maxAmount}`} /></div>
             <div><label className="input-label">Tenure (months) *</label><input className="input-field" name="tenure" type="number" required max={applyType.maxTenure} placeholder={`Max ${applyType.maxTenure}`} /></div>
@@ -146,7 +157,7 @@ export default function LoansPage() {
           {/* Status */}
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             {['PENDING', 'ACTIVE', 'CLOSED'].map(s => (
-              <button key={s} onClick={() => { const d = { status: s }; setLoans(loans.map(l => l.id === showDetail.id ? { ...l, ...d } : l)); setShowDetail({ ...showDetail, ...d }); toast(`Status → ${s}`, 'success'); }} style={{ flex: 1, padding: '8px', textAlign: 'center', borderRadius: 'var(--radius-md)', fontSize: 11, fontWeight: 600, background: showDetail.status === s ? (s === 'ACTIVE' ? 'rgba(16,185,129,0.12)' : s === 'CLOSED' ? 'rgba(100,116,139,0.12)' : 'rgba(245,158,11,0.12)') : 'var(--bg-tertiary)', color: showDetail.status === s ? statusClr(s) : 'var(--text-muted)', cursor: 'pointer', border: 'none' }}>{s}</button>
+              <button key={s} onClick={async () => { const r = await fetch('/api/loans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: s }) }); if (r.ok) { const updated = await r.json(); setLoans(loans.map(l => l.id === updated.id ? updated : l)); setShowDetail(updated); toast(`Status → ${s}`, 'success'); } }} style={{ flex: 1, padding: '8px', textAlign: 'center', borderRadius: 'var(--radius-md)', fontSize: 11, fontWeight: 600, background: showDetail.status === s ? (s === 'ACTIVE' ? 'rgba(16,185,129,0.12)' : s === 'CLOSED' ? 'rgba(100,116,139,0.12)' : 'rgba(245,158,11,0.12)') : 'var(--bg-tertiary)', color: showDetail.status === s ? statusClr(s) : 'var(--text-muted)', cursor: 'pointer', border: 'none' }}>{s}</button>
             ))}
           </div>
 

@@ -1,7 +1,7 @@
 'use client';
 import toast from '@/lib/toast';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './assets.module.css';
 import { BarChart, DonutChart } from '@/components/ui/Charts';
 
@@ -166,7 +166,7 @@ const mockAssets = [
   },
 ];
 
-type Asset = typeof mockAssets[0];
+type Asset = any;
 
 const categories = ['All', 'Laptop', 'Monitor', 'Mobile', 'Tablet', 'Furniture', 'Peripheral'];
 const statusConfig: Record<string, { label: string; bg: string; color: string; icon: string }> = {
@@ -178,6 +178,7 @@ const statusConfig: Record<string, { label: string; bg: string; color: string; i
 const conditionColors: Record<string, string> = { Excellent: 'var(--color-accent-400)', Good: 'var(--color-primary-400)', Fair: 'var(--color-warning-400)', Damaged: 'var(--color-danger-400)', New: '#a78bfa' };
 
 export default function AssetsPage() {
+  const [assets, setAssets] = useState<Asset[]>(mockAssets);
   const [catFilter, setCatFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -185,21 +186,24 @@ export default function AssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [detailTab, setDetailTab] = useState<'overview' | 'specs' | 'history' | 'maintenance' | 'documents'>('overview');
 
-  const filtered = mockAssets.filter(a => {
+  useEffect(() => {
+    fetch('/api/assets').then(r => r.json()).then(d => { if (d.data?.length) setAssets(d.data.map((a: any) => ({ ...a, serial: a.serialNo || a.serial || '', assignedTo: a.assignedTo ? { name: `${a.assignedTo.firstName} ${a.assignedTo.lastName}`, code: a.assignedTo.employeeCode, dept: '' } : null, purchasePrice: a.value || 0, depreciation: { currentValue: a.value || 0 }, maintenanceLog: [], history: [], documents: [], specs: {} }))); }).catch(() => {});
+  }, []);
+
+  const filtered = assets.filter(a => {
     if (catFilter !== 'All' && a.category !== catFilter) return false;
     if (statusFilter !== 'ALL' && a.status !== statusFilter) return false;
-    if (search && !`${a.name} ${a.serial} ${a.assetTag} ${a.assignedTo?.name || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !`${a.name} ${a.serial || ''} ${a.assetTag || ''} ${a.assignedTo?.name || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const totalValue = mockAssets.reduce((s, a) => s + a.purchasePrice, 0);
-  const currentValue = mockAssets.reduce((s, a) => s + a.depreciation.currentValue, 0);
-  const totalMaintCost = mockAssets.reduce((s, a) => s + a.maintenanceLog.reduce((ms, m) => ms + m.cost, 0), 0);
+  const totalValue = assets.reduce((s, a) => s + (a.purchasePrice || a.value || 0), 0);
+  const currentValue = assets.reduce((s, a) => s + (a.depreciation?.currentValue || a.value || 0), 0);
+  const totalMaintCost = assets.reduce((s, a) => s + (a.maintenanceLog || []).reduce((ms: number, m: any) => ms + (m.cost || 0), 0), 0);
 
-  // Category breakdown for donut
   const catBreakdown = categories.filter(c => c !== 'All').map(cat => ({
     label: cat,
-    value: mockAssets.filter(a => a.category === cat).length,
+    value: assets.filter(a => a.category === cat).length,
     color: { Laptop: 'var(--color-primary-500)', Monitor: 'var(--color-accent-500)', Mobile: 'var(--color-warning-500)', Tablet: '#8b5cf6', Furniture: 'var(--color-info-500)', Peripheral: 'var(--color-danger-400)' }[cat] || 'var(--text-muted)',
   })).filter(c => c.value > 0);
 
@@ -233,8 +237,8 @@ export default function AssetsPage() {
               <div className={styles.kpiIcon} style={{ background: 'rgba(59,130,246,0.1)' }}>📦</div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>Total Assets</span>
-                <span className={styles.kpiValue}>{mockAssets.length}</span>
-                <span className={styles.kpiSub}>{mockAssets.filter(a => a.status === 'ASSIGNED').length} assigned · {mockAssets.filter(a => a.status === 'IN_STOCK').length} available</span>
+                <span className={styles.kpiValue}>{assets.length}</span>
+                <span className={styles.kpiSub}>{assets.filter(a => a.status === 'ASSIGNED').length} assigned · {assets.filter(a => a.status === 'AVAILABLE' || a.status === 'IN_STOCK').length} available</span>
               </div>
             </div>
             <div className={styles.kpiCard}>
@@ -257,7 +261,7 @@ export default function AssetsPage() {
               <div className={styles.kpiIcon} style={{ background: 'rgba(239,68,68,0.1)' }}>⚠️</div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>Warranty Expiring</span>
-                <span className={styles.kpiValue}>{mockAssets.filter(a => { const exp = new Date(a.warrantyExpiry); const now = new Date(); const diff = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24); return diff > 0 && diff < 90; }).length}</span>
+                <span className={styles.kpiValue}>{assets.filter(a => { if (!a.warrantyExpiry && !a.warrantyEnd) return false; const exp = new Date(a.warrantyExpiry || a.warrantyEnd); const now = new Date(); const diff = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24); return diff > 0 && diff < 90; }).length}</span>
                 <span className={styles.kpiSub}>Within 90 days</span>
               </div>
             </div>
@@ -268,7 +272,7 @@ export default function AssetsPage() {
             <div className={styles.chartCard}>
               <h3>Asset Distribution</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
-                <DonutChart data={catBreakdown} size={120} thickness={16} centerValue={mockAssets.length} centerLabel="Total" />
+                <DonutChart data={catBreakdown} size={120} thickness={16} centerValue={assets.length} centerLabel="Total" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {catBreakdown.map(d => (
                     <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)' }}>
@@ -318,7 +322,7 @@ export default function AssetsPage() {
             </div>
           </div>
 
-          <div className={styles.resultCount}>{filtered.length} of {mockAssets.length} assets</div>
+          <div className={styles.resultCount}>{filtered.length} of {assets.length} assets</div>
 
           {/* Grid View */}
           {viewMode === 'grid' ? (
@@ -342,7 +346,7 @@ export default function AssetsPage() {
                     </div>
                     {asset.assignedTo ? (
                       <div className={styles.assignedTo}>
-                        <div className={styles.assignAvatar}>{asset.assignedTo.name.split(' ').map(n => n[0]).join('')}</div>
+                        <div className={styles.assignAvatar}>{asset.assignedTo.name.split(' ').map((n: string) => n[0]).join('')}</div>
                         <div>
                           <span className={styles.assignName}>{asset.assignedTo.name}</span>
                           <span className={styles.assignDept}>{asset.assignedTo.dept} · Since {new Date(asset.assignedDate!).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
@@ -493,7 +497,7 @@ export default function AssetsPage() {
                   <h3>Current Assignment</h3>
                   <div className={styles.assignmentCard}>
                     <div className={styles.assignAvatar} style={{ width: 48, height: 48, fontSize: 16 }}>
-                      {selectedAsset.assignedTo.name.split(' ').map(n => n[0]).join('')}
+                      {selectedAsset.assignedTo.name.split(' ').map((n: string) => n[0]).join('')}
                     </div>
                     <div>
                       <span className={styles.assignName} style={{ fontSize: 'var(--text-md)' }}>{selectedAsset.assignedTo.name}</span>
@@ -516,10 +520,10 @@ export default function AssetsPage() {
           {/* ── Specifications Tab ── */}
           {detailTab === 'specs' && (
             <div className={styles.specsGrid}>
-              {Object.entries(selectedAsset.specs).map(([key, value]) => (
+              {Object.entries(selectedAsset.specs || {}).map(([key, value]) => (
                 <div key={key} className={styles.specItem}>
-                  <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</label>
-                  <span>{value}</span>
+                  <label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase())}</label>
+                  <span>{String(value)}</span>
                 </div>
               ))}
             </div>
@@ -528,7 +532,7 @@ export default function AssetsPage() {
           {/* ── History Tab ── */}
           {detailTab === 'history' && (
             <div className={styles.timeline}>
-              {selectedAsset.history.map((entry, i) => (
+              {(selectedAsset.history || []).map((entry: any, i: number) => (
                 <div key={i} className={styles.timelineItem} style={{ animationDelay: `${i * 60}ms` }}>
                   <div className={styles.timelineDot} data-action={entry.action.toLowerCase().replace(/ /g, '-')} />
                   <div className={styles.timelineContent}>
@@ -553,7 +557,7 @@ export default function AssetsPage() {
               </div>
               {selectedAsset.maintenanceLog.length > 0 ? (
                 <div className={styles.maintList}>
-                  {selectedAsset.maintenanceLog.map((m, i) => (
+                  {(selectedAsset.maintenanceLog || []).map((m: any, i: number) => (
                     <div key={i} className={styles.maintCard} style={{ animationDelay: `${i * 50}ms` }}>
                       <div className={styles.maintHeader}>
                         <span className={styles.maintType} data-type={m.type.toLowerCase()}>{m.type}</span>
@@ -582,7 +586,7 @@ export default function AssetsPage() {
               </div>
               {selectedAsset.documents.length > 0 ? (
                 <div className={styles.docList}>
-                  {selectedAsset.documents.map((doc, i) => (
+                  {(selectedAsset.documents || []).map((doc: any, i: number) => (
                     <div key={i} className={styles.docItem} style={{ animationDelay: `${i * 50}ms` }}>
                       <div className={styles.docIcon}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>

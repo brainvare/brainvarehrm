@@ -1,19 +1,12 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'plans' | 'enrollment' | 'claims';
 
 export default function BenefitsPage() {
   const [tab, setTab] = useState<Tab>('plans');
-  const [plans, setPlans] = useState([
-    { id: '1', name: 'Group Health Insurance', type: 'HEALTH', provider: 'ICICI Lombard', coverage: '5L per family', premium: 1200, enrolled: 8, eligible: 10, status: 'ACTIVE', icon: '🏥', description: 'Comprehensive health coverage for employees and dependents' },
-    { id: '2', name: 'Term Life Cover', type: 'LIFE', provider: 'HDFC Life', coverage: '50L', premium: 350, enrolled: 6, eligible: 10, status: 'ACTIVE', icon: '🛡️', description: 'Term life insurance benefit' },
-    { id: '3', name: 'Accidental Insurance', type: 'ACCIDENT', provider: 'Bajaj Allianz', coverage: '25L', premium: 150, enrolled: 10, eligible: 10, status: 'ACTIVE', icon: '⚡', description: 'Accidental death and disability coverage' },
-    { id: '4', name: 'Gym Membership', type: 'WELLNESS', provider: 'Cult.fit', coverage: 'Unlimited classes', premium: 800, enrolled: 5, eligible: 10, status: 'ACTIVE', icon: '💪', description: 'Gym and fitness membership' },
-    { id: '5', name: 'Learning Budget', type: 'DEVELOPMENT', provider: 'Internal', coverage: '₹25K/year', premium: 0, enrolled: 7, eligible: 10, status: 'ACTIVE', icon: '📚', description: 'Annual learning and development budget' },
-    { id: '6', name: 'Meal Allowance', type: 'FOOD', provider: 'Sodexo', coverage: '₹2,200/month', premium: 0, enrolled: 10, eligible: 10, status: 'ACTIVE', icon: '🍽️', description: 'Monthly meal card benefit' },
-  ]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [claims, setClaims] = useState([
     { id: '1', employee: 'Sneha Reddy', plan: 'Health Insurance', amount: 15000, type: 'MEDICAL', date: '2026-04-10', status: 'APPROVED', docs: 2, notes: 'Hospital visit for child' },
     { id: '2', employee: 'Karan Malhotra', plan: 'Health Insurance', amount: 8500, type: 'DENTAL', date: '2026-04-15', status: 'PENDING', docs: 1, notes: 'Root canal treatment' },
@@ -27,9 +20,13 @@ export default function BenefitsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
   const [showClaimDetail, setShowClaimDetail] = useState<any>(null);
 
+  useEffect(() => {
+    fetch('/api/benefits').then(r => r.json()).then(d => setPlans(d.data || [])).catch(() => {});
+  }, []);
+
   const statusClr = (s: string) => s === 'ACTIVE' || s === 'APPROVED' ? 'var(--color-accent-400)' : s === 'PENDING' ? 'var(--color-warning-400)' : 'var(--color-danger-400)';
 
-  const handleCreatePlan = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const p = { id: Date.now().toString(), name: (f.elements.namedItem('name') as HTMLInputElement).value, type: (f.elements.namedItem('type') as HTMLSelectElement).value, provider: (f.elements.namedItem('provider') as HTMLInputElement).value, coverage: (f.elements.namedItem('coverage') as HTMLInputElement).value, premium: parseInt((f.elements.namedItem('premium') as HTMLInputElement).value) || 0, enrolled: 0, eligible: 10, status: 'ACTIVE', icon: '🎁', description: (f.elements.namedItem('desc') as HTMLInputElement)?.value || '' }; setPlans([...plans, p]); setShowCreate(false); toast('Plan created!', 'success'); };
+  const handleCreatePlan = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const r = await fetch('/api/benefits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: (f.elements.namedItem('name') as HTMLInputElement).value, type: (f.elements.namedItem('type') as HTMLSelectElement).value, provider: (f.elements.namedItem('provider') as HTMLInputElement).value, coverage: (f.elements.namedItem('coverage') as HTMLInputElement).value, premium: parseInt((f.elements.namedItem('premium') as HTMLInputElement).value) || 0, description: (f.elements.namedItem('desc') as HTMLTextAreaElement)?.value || '' }) }); if (r.ok) { const p = await r.json(); setPlans([...plans, p]); setShowCreate(false); toast('Plan created!', 'success'); } else toast('Failed', 'error'); };
   const handleCreateClaim = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const c = { id: Date.now().toString(), employee: (f.elements.namedItem('employee') as HTMLInputElement).value, plan: (f.elements.namedItem('plan') as HTMLSelectElement).value, amount: parseInt((f.elements.namedItem('amount') as HTMLInputElement).value), type: (f.elements.namedItem('claimType') as HTMLSelectElement).value, date: (f.elements.namedItem('date') as HTMLInputElement).value || new Date().toISOString().split('T')[0], status: 'PENDING', docs: 0, notes: (f.elements.namedItem('notes') as HTMLInputElement)?.value || '' }; setClaims([c, ...claims]); setShowClaim(false); toast('Claim submitted!', 'success'); };
   const saveEdits = () => { setPlans(plans.map(p => p.id === showDetail.id ? { ...p, ...editData } : p)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
   const deletePlan = (id: string) => { setPlans(plans.filter(p => p.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Plan removed', 'success'); };

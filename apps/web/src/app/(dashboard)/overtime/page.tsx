@@ -1,25 +1,26 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'requests' | 'rules' | 'analytics';
 
 export default function OvertimePage() {
   const [tab, setTab] = useState<Tab>('requests');
   const [filter, setFilter] = useState<'all' | 'PENDING' | 'APPROVED'>('all');
-  const [requests, setRequests] = useState([
-    { id: '1', employee: 'Sneha Reddy', dept: 'Engineering', date: '2026-04-18', hours: 3, type: 'WEEKDAY', rate: 1.5, reason: 'Sprint deadline — release v2.3', status: 'APPROVED', approvedBy: 'Manager' },
-    { id: '2', employee: 'Karan Malhotra', dept: 'Engineering', date: '2026-04-19', hours: 4, type: 'WEEKEND', rate: 2.0, reason: 'Critical bug fix — production down', status: 'APPROVED', approvedBy: 'CTO' },
-    { id: '3', employee: 'Rahul Sharma', dept: 'Engineering', date: '2026-04-19', hours: 2.5, type: 'WEEKDAY', rate: 1.5, reason: 'Client demo preparation', status: 'PENDING', approvedBy: '' },
-    { id: '4', employee: 'Amit Kumar', dept: 'Marketing', date: '2026-04-17', hours: 3, type: 'WEEKDAY', rate: 1.5, reason: 'Campaign launch content', status: 'APPROVED', approvedBy: 'Manager' },
-    { id: '5', employee: 'Meera Nair', dept: 'Design', date: '2026-04-16', hours: 5, type: 'HOLIDAY', rate: 3.0, reason: 'Urgent rebrand deliverables', status: 'APPROVED', approvedBy: 'Manager' },
-    { id: '6', employee: 'Priya Patel', dept: 'HR', date: '2026-04-20', hours: 2, type: 'WEEKDAY', rate: 1.5, reason: 'Offer letter processing batch', status: 'PENDING', approvedBy: '' },
-  ]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/overtime').then(r => r.json()).then(d => setRequests(d.data || [])).catch(() => {});
+    fetch('/api/master-data').then(r => r.json()).then(d => setEmployees(d.employees || [])).catch(() => {});
+  }, []);
+
+  const norm = (r: any) => ({ ...r, employee: r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : (r.employeeName || 'Unknown'), dept: r.employee?.department || r.dept || '' });
 
   const otRules = [
     { type: 'WEEKDAY', rate: '1.5x', desc: 'Regular overtime beyond 8 hrs', maxHrs: 4, color: 'var(--color-primary-400)' },
@@ -28,14 +29,15 @@ export default function OvertimePage() {
   ];
   const monthlyData = [{ month: 'Jan', hours: 42, cost: 38000 }, { month: 'Feb', hours: 35, cost: 31500 }, { month: 'Mar', hours: 55, cost: 52000 }, { month: 'Apr', hours: 19.5, cost: 18500 }];
 
-  const totalHours = requests.reduce((s, r) => s + r.hours, 0);
-  const filtered = filter === 'all' ? requests : requests.filter(r => r.status === filter);
+  const totalHours = requests.reduce((s, r) => s + (r.hours || 0), 0);
+  const normed = requests.map(norm);
+  const filtered = filter === 'all' ? normed : normed.filter(r => r.status === filter);
   const maxBar = Math.max(...monthlyData.map(m => m.hours));
   const typeClr = (t: string) => t === 'WEEKEND' ? '#a78bfa' : t === 'HOLIDAY' ? 'var(--color-danger-400)' : 'var(--color-primary-400)';
 
-  const handleCreate = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const r = { id: Date.now().toString(), employee: (f.elements.namedItem('employee') as HTMLInputElement).value, dept: (f.elements.namedItem('dept') as HTMLInputElement).value, date: (f.elements.namedItem('date') as HTMLInputElement).value, hours: parseFloat((f.elements.namedItem('hours') as HTMLInputElement).value), type: (f.elements.namedItem('type') as HTMLSelectElement).value, rate: parseFloat((f.elements.namedItem('rate') as HTMLInputElement).value) || 1.5, reason: (f.elements.namedItem('reason') as HTMLInputElement).value, status: 'PENDING', approvedBy: '' }; setRequests([r, ...requests]); setShowCreate(false); toast('OT request logged!', 'success'); };
-  const handleAction = (id: string, status: string) => { setRequests(requests.map(r => r.id === id ? { ...r, status, approvedBy: status === 'APPROVED' ? 'Manager' : '' } : r)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`OT ${status.toLowerCase()}`, 'success'); };
-  const saveEdits = () => { setRequests(requests.map(r => r.id === showDetail.id ? { ...r, ...editData } : r)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  const handleCreate = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const rateMap: Record<string, number> = { WEEKDAY: 1.5, WEEKEND: 2.0, HOLIDAY: 3.0 }; const type = (f.elements.namedItem('type') as HTMLSelectElement).value; const r = await fetch('/api/overtime', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: (f.elements.namedItem('employeeId') as HTMLSelectElement).value, date: (f.elements.namedItem('date') as HTMLInputElement).value, hours: parseFloat((f.elements.namedItem('hours') as HTMLInputElement).value), rate: rateMap[type] || 1.5, reason: (f.elements.namedItem('reason') as HTMLTextAreaElement).value }) }); if (r.ok) { const entry = await r.json(); setRequests([entry, ...requests]); setShowCreate(false); toast('OT request logged!', 'success'); } else toast('Failed', 'error'); };
+  const handleAction = async (id: string, status: string) => { const r = await fetch('/api/overtime', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status, approvedBy: status === 'APPROVED' ? 'Manager' : null }) }); if (r.ok) { const updated = await r.json(); setRequests(requests.map(req => req.id === id ? updated : req)); if (showDetail?.id === id) setShowDetail(updated); toast(`OT ${status.toLowerCase()}`, 'success'); } };
+  const saveEdits = async () => { const r = await fetch('/api/overtime', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status }) }); if (r.ok) { const updated = await r.json(); setRequests(requests.map(req => req.id === updated.id ? updated : req)); setShowDetail(updated); setEditing(false); toast('Updated!', 'success'); } };
   const deleteOT = (id: string) => { setRequests(requests.filter(r => r.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('OT record removed', 'success'); };
 
   return (
@@ -68,7 +70,7 @@ export default function OvertimePage() {
             <div key={req.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', cursor: 'pointer' }} onClick={() => { setShowDetail(req); setEditData(req); setEditing(false); }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                  <div className="avatar avatar-sm">{req.employee.split(' ').map(n => n[0]).join('')}</div>
+                  <div className="avatar avatar-sm">{String(req.employee || '?').split(' ').map((n: string) => n[0]).join('')}</div>
                   <div><div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{req.employee}</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{req.dept} · 📅 {new Date(req.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div></div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -138,16 +140,12 @@ export default function OvertimePage() {
       {showCreate && <div className="modal-overlay" onClick={() => setShowCreate(false)}><div className="modal-content" style={{ maxWidth: 550 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2>Log Overtime</h2><button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button></div>
         <form className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleCreate}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-            <div><label className="input-label">Employee *</label><input className="input-field" name="employee" required placeholder="Sneha Reddy" /></div>
-            <div><label className="input-label">Department</label><input className="input-field" name="dept" placeholder="Engineering" /></div>
-          </div>
+          <div><label className="input-label">Employee *</label><select className="input-field" name="employeeId" required><option value="">Select employee...</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
             <div><label className="input-label">Date *</label><input className="input-field" name="date" type="date" required /></div>
             <div><label className="input-label">Hours *</label><input className="input-field" name="hours" type="number" step="0.5" required placeholder="3" /></div>
             <div><label className="input-label">Type</label><select className="input-field" name="type"><option value="WEEKDAY">Weekday (1.5x)</option><option value="WEEKEND">Weekend (2.0x)</option><option value="HOLIDAY">Holiday (3.0x)</option></select></div>
           </div>
-          <input type="hidden" name="rate" value="1.5" />
           <div><label className="input-label">Reason *</label><textarea className="input-field" name="reason" rows={2} required placeholder="Why overtime was needed..." /></div>
           <div className="modal-footer" style={{ padding: 0, border: 'none' }}><button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="btn btn-primary">Submit</button></div>
         </form>

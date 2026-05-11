@@ -1,19 +1,13 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const priorityColors: Record<string, string> = { HIGH: 'var(--color-danger-400)', MEDIUM: 'var(--color-warning-400)', LOW: 'var(--color-accent-400)' };
 const statusLabels: Record<string, { label: string; bg: string; color: string }> = { OPEN: { label: 'Open', bg: 'rgba(59,130,246,0.12)', color: 'var(--color-primary-400)' }, IN_PROGRESS: { label: 'In Progress', bg: 'rgba(245,158,11,0.12)', color: 'var(--color-warning-400)' }, RESOLVED: { label: 'Resolved', bg: 'rgba(16,185,129,0.12)', color: 'var(--color-accent-400)' }, CLOSED: { label: 'Closed', bg: 'var(--bg-tertiary)', color: 'var(--text-muted)' } };
 
 export default function HelpdeskPage() {
-  const [tickets, setTickets] = useState([
-    { id: 'TKT-001', subject: 'VPN access not working from home', category: 'IT Support', priority: 'HIGH', status: 'OPEN', createdBy: 'Rohit Mehta', assignedTo: 'IT Admin', createdAt: '2026-04-18', description: 'Cannot connect to VPN from home network.', replies: ['Looking into this — IT Admin'] },
-    { id: 'TKT-002', subject: 'Salary slip discrepancy — March 2026', category: 'Payroll', priority: 'HIGH', status: 'IN_PROGRESS', createdBy: 'Ananya Iyer', assignedTo: 'HR Admin', createdAt: '2026-04-16', description: 'March salary shows incorrect deductions.', replies: ['Checking payroll records', 'Found the issue, correcting now'] },
-    { id: 'TKT-003', subject: 'Request for standing desk setup', category: 'Facilities', priority: 'LOW', status: 'OPEN', createdBy: 'Arjun Desai', assignedTo: 'Admin', createdAt: '2026-04-15', description: '', replies: [] },
-    { id: 'TKT-004', subject: 'Update emergency contact info', category: 'HR', priority: 'MEDIUM', status: 'RESOLVED', createdBy: 'Kavya Nair', assignedTo: 'HR Admin', createdAt: '2026-04-10', description: '', replies: ['Updated in system'] },
-    { id: 'TKT-005', subject: 'Conference room booking app access', category: 'IT Support', priority: 'MEDIUM', status: 'OPEN', createdBy: 'Megha Joshi', assignedTo: 'IT Admin', createdAt: '2026-04-08', description: '', replies: [] },
-    { id: 'TKT-006', subject: 'Leave balance incorrect after carry forward', category: 'HR', priority: 'HIGH', status: 'CLOSED', createdBy: 'Priya Patel', assignedTo: 'HR Admin', createdAt: '2026-04-01', description: '', replies: ['Resolved after correction', 'Confirmed by employee'] },
-  ]);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [filter, setFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showCreate, setShowCreate] = useState(false);
@@ -23,15 +17,22 @@ export default function HelpdeskPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
 
+  useEffect(() => {
+    fetch('/api/helpdesk').then(r => r.json()).then(d => setTickets(d.data || [])).catch(() => {});
+    fetch('/api/master-data').then(r => r.json()).then(d => setEmployees(d.employees || [])).catch(() => {});
+  }, []);
+
+  const norm = (t: any) => ({ ...t, subject: t.title || t.subject, createdBy: t.raisedBy ? `${t.raisedBy.firstName} ${t.raisedBy.lastName}` : (t.createdBy || 'Unknown'), replies: t.replies || [] });
+
   const categories = ['All', 'IT Support', 'HR', 'Payroll', 'Facilities'];
-  const filtered = tickets.filter(t => { if (filter !== 'All' && t.category !== filter) return false; if (statusFilter !== 'ALL' && t.status !== statusFilter) return false; return true; });
+  const filtered = tickets.map(norm).filter(t => { if (filter !== 'All' && t.category !== filter) return false; if (statusFilter !== 'ALL' && t.status !== statusFilter) return false; return true; });
   const stats = { open: tickets.filter(t => t.status === 'OPEN').length, inProgress: tickets.filter(t => t.status === 'IN_PROGRESS').length, resolved: tickets.filter(t => t.status === 'RESOLVED').length, closed: tickets.filter(t => t.status === 'CLOSED').length };
 
-  const handleCreate = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const t = { id: `TKT-${String(tickets.length + 1).padStart(3, '0')}`, subject: (f.elements.namedItem('subject') as HTMLInputElement).value, category: (f.elements.namedItem('category') as HTMLSelectElement).value, priority: (f.elements.namedItem('priority') as HTMLSelectElement).value, status: 'OPEN', createdBy: 'You', assignedTo: 'Unassigned', createdAt: new Date().toISOString().split('T')[0], description: (f.elements.namedItem('desc') as HTMLTextAreaElement).value, replies: [] as string[] }; setTickets([t, ...tickets]); setShowCreate(false); toast('Ticket created!', 'success'); };
-  const changeStatus = (id: string, status: string) => { setTickets(tickets.map(t => t.id === id ? { ...t, status } : t)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`Status → ${statusLabels[status]?.label || status}`, 'success'); };
-  const saveEdits = () => { setTickets(tickets.map(t => t.id === showDetail.id ? { ...t, ...editData } : t)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  const handleCreate = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const raisedById = (f.elements.namedItem('raisedById') as HTMLSelectElement).value; const r = await fetch('/api/helpdesk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: (f.elements.namedItem('subject') as HTMLInputElement).value, description: (f.elements.namedItem('desc') as HTMLTextAreaElement).value, category: (f.elements.namedItem('category') as HTMLSelectElement).value, priority: (f.elements.namedItem('priority') as HTMLSelectElement).value, raisedById }) }); if (r.ok) { const t = await r.json(); setTickets([t, ...tickets]); setShowCreate(false); toast('Ticket created!', 'success'); } else toast('Failed', 'error'); };
+  const changeStatus = async (id: string, status: string) => { const r = await fetch('/api/helpdesk', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); if (r.ok) { const updated = await r.json(); setTickets(tickets.map(t => t.id === id ? updated : t)); if (showDetail?.id === id) setShowDetail(updated); toast(`Status → ${statusLabels[status]?.label || status}`, 'success'); } };
+  const saveEdits = async () => { const r = await fetch('/api/helpdesk', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status, assignedToName: editData.assignedTo }) }); if (r.ok) { const updated = await r.json(); setTickets(tickets.map(t => t.id === updated.id ? updated : t)); setShowDetail(updated); setEditing(false); toast('Updated!', 'success'); } };
   const deleteTicket = (id: string) => { setTickets(tickets.filter(t => t.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Ticket deleted', 'success'); };
-  const addReply = (id: string) => { if (!replyText.trim()) return; setTickets(tickets.map(t => t.id === id ? { ...t, replies: [...t.replies, replyText] } : t)); if (showDetail?.id === id) setShowDetail({ ...showDetail, replies: [...showDetail.replies, replyText] }); setReplyText(''); toast('Reply sent!', 'success'); };
+  const addReply = (id: string) => { if (!replyText.trim()) return; setTickets(tickets.map(t => t.id === id ? { ...t, replies: [...(t.replies || []), replyText] } : t)); if (showDetail?.id === id) setShowDetail({ ...showDetail, replies: [...(showDetail.replies || []), replyText] }); setReplyText(''); toast('Reply sent!', 'success'); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', animation: 'fadeIn 0.3s ease' }}>
@@ -77,10 +78,11 @@ export default function HelpdeskPage() {
       {showCreate && <div className="modal-overlay" onClick={() => setShowCreate(false)}><div className="modal-content" style={{ maxWidth: 550 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2>New Ticket</h2><button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button></div>
         <form className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleCreate}>
+          <div><label className="input-label">Raised By *</label><select className="input-field" name="raisedById" required><option value="">Select employee...</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
           <div><label className="input-label">Subject *</label><input className="input-field" name="subject" required placeholder="Brief description of your issue" /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div><label className="input-label">Category</label><select className="input-field" name="category"><option>IT Support</option><option>HR</option><option>Payroll</option><option>Facilities</option></select></div>
-            <div><label className="input-label">Priority</label><select className="input-field" name="priority"><option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option><option value="HIGH">High</option></select></div>
+            <div><label className="input-label">Priority</label><select className="input-field" name="priority"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></div>
           </div>
           <div><label className="input-label">Description</label><textarea className="input-field" name="desc" rows={4} placeholder="Provide details..." /></div>
           <div className="modal-footer" style={{ padding: 0, border: 'none' }}><button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create Ticket</button></div>

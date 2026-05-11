@@ -1,32 +1,36 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'requests' | 'policy' | 'summary';
 const statusConfig: Record<string, { bg: string; color: string }> = { APPROVED: { bg: 'rgba(16,185,129,0.12)', color: 'var(--color-accent-400)' }, PENDING: { bg: 'rgba(245,158,11,0.12)', color: 'var(--color-warning-400)' }, DRAFT: { bg: 'rgba(100,116,139,0.12)', color: 'var(--text-tertiary)' }, REJECTED: { bg: 'rgba(239,68,68,0.12)', color: 'var(--color-danger-400)' }, COMPLETED: { bg: 'rgba(59,130,246,0.12)', color: 'var(--color-primary-400)' } };
 
 export default function TravelPage() {
   const [tab, setTab] = useState<Tab>('requests');
-  const [trips, setTrips] = useState([
-    { id: '1', employee: 'Sneha Reddy', destination: 'Bangalore → Mumbai', purpose: 'Client presentation — Reliance Jio', dates: 'Apr 22-24', days: 3, budget: 45000, status: 'APPROVED', advance: 20000, notes: '' },
-    { id: '2', employee: 'Karan Malhotra', destination: 'Bangalore → Delhi', purpose: 'Tech conference — DevOps India', dates: 'May 5-7', days: 3, budget: 55000, status: 'PENDING', advance: 0, notes: '' },
-    { id: '3', employee: 'Priya Patel', destination: 'Bangalore → Hyderabad', purpose: 'HR Leadership Summit', dates: 'Apr 28-29', days: 2, budget: 25000, status: 'APPROVED', advance: 15000, notes: '' },
-    { id: '4', employee: 'Amit Kumar', destination: 'Bangalore → Goa', purpose: 'Team offsite — Marketing retreat', dates: 'May 10-12', days: 3, budget: 35000, status: 'DRAFT', advance: 0, notes: '' },
-  ]);
+  const [trips, setTrips] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
 
+  useEffect(() => {
+    fetch('/api/travel').then(r => r.json()).then(d => setTrips(d.data || [])).catch(() => {});
+    fetch('/api/master-data').then(r => r.json()).then(d => setEmployees(d.employees || [])).catch(() => {});
+  }, []);
+
+  const norm = (t: any) => ({ ...t, employee: t.employee ? `${t.employee.firstName} ${t.employee.lastName}` : (t.employeeName || 'Unknown'), destination: t.destination || t.toCity || '', purpose: t.purpose || t.reason || '', dates: t.fromDate ? `${new Date(t.fromDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(t.toDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : (t.dates || ''), budget: t.estimatedBudget || t.budget || 0, advance: t.advanceAmount || t.advance || 0 });
+
   const travelPolicies = [{ category: 'Flights', tier1: 'Business Class', tier2: 'Economy + Extra', tier3: 'Economy', icon: '✈️' }, { category: 'Hotels', tier1: '5-Star / ₹8K/night', tier2: '4-Star / ₹5K/night', tier3: '3-Star / ₹3K/night', icon: '🏨' }, { category: 'Meals', tier1: '₹2,500/day', tier2: '₹1,500/day', tier3: '₹1,000/day', icon: '🍽️' }, { category: 'Transport', tier1: 'Cab / Self-drive', tier2: 'Cab / Rideshare', tier3: 'Public + Rideshare', icon: '🚕' }];
 
   const fm = (n: number) => `₹${(n / 1000).toFixed(0)}K`;
-  const totalBudget = trips.reduce((s, t) => s + t.budget, 0);
-  const totalAdvance = trips.reduce((s, t) => s + t.advance, 0);
+  const normed = trips.map(norm);
+  const totalBudget = normed.reduce((s, t) => s + (t.budget || 0), 0);
+  const totalAdvance = normed.reduce((s, t) => s + (t.advance || 0), 0);
 
-  const handleCreate = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; setTrips([{ id: Date.now().toString(), employee: (f.elements.namedItem('employee') as HTMLInputElement).value, destination: (f.elements.namedItem('destination') as HTMLInputElement).value, purpose: (f.elements.namedItem('purpose') as HTMLInputElement).value, dates: (f.elements.namedItem('dates') as HTMLInputElement).value, days: parseInt((f.elements.namedItem('days') as HTMLInputElement).value) || 1, budget: parseInt((f.elements.namedItem('budget') as HTMLInputElement).value) || 0, status: 'DRAFT', advance: 0, notes: '' }, ...trips]); setShowCreate(false); toast('Travel request created!', 'success'); };
-  const saveEdits = () => { setTrips(trips.map(t => t.id === showDetail.id ? { ...t, ...editData, budget: parseInt(editData.budget) || 0, advance: parseInt(editData.advance) || 0, days: parseInt(editData.days) || 1 } : t)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  const handleCreate = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const r = await fetch('/api/travel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: (f.elements.namedItem('employeeId') as HTMLSelectElement).value, destination: (f.elements.namedItem('destination') as HTMLInputElement).value, purpose: (f.elements.namedItem('purpose') as HTMLInputElement).value, fromDate: (f.elements.namedItem('fromDate') as HTMLInputElement).value, toDate: (f.elements.namedItem('toDate') as HTMLInputElement).value, estimatedBudget: parseInt((f.elements.namedItem('budget') as HTMLInputElement).value) || 0 }) }); if (r.ok) { const trip = await r.json(); setTrips([trip, ...trips]); setShowCreate(false); toast('Travel request created!', 'success'); } else toast('Failed', 'error'); };
+  const saveEdits = async () => { const r = await fetch('/api/travel', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status }) }); if (r.ok) { const updated = await r.json(); setTrips(trips.map(t => t.id === updated.id ? updated : t)); setShowDetail(updated); setEditing(false); toast('Updated!', 'success'); } };
   const deleteTrip = (id: string) => { setTrips(trips.filter(t => t.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Request deleted', 'success'); };
   const changeStatus = (id: string, status: string) => { setTrips(trips.map(t => t.id === id ? { ...t, status } : t)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`Status → ${status}`, 'success'); };
 
@@ -50,7 +54,7 @@ export default function TravelPage() {
       </div>
 
       {tab === 'requests' && <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        {trips.map(trip => { const sc = statusConfig[trip.status]; return (
+        {normed.map(trip => { const sc = statusConfig[trip.status] || statusConfig['DRAFT']; return (
           <div key={trip.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }} onClick={() => { setShowDetail(trip); setEditData(trip); setEditing(false); }}>
             <div style={{ fontSize: 24 }}>✈️</div>
             <div style={{ flex: 1 }}>
@@ -102,14 +106,12 @@ export default function TravelPage() {
       {showCreate && <div className="modal-overlay" onClick={() => setShowCreate(false)}><div className="modal-content" style={{ maxWidth: 550 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2>New Travel Request</h2><button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button></div>
         <form className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleCreate}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-            <div><label className="input-label">Employee *</label><input className="input-field" name="employee" required placeholder="Name" /></div>
-            <div><label className="input-label">Destination *</label><input className="input-field" name="destination" required placeholder="City A → City B" /></div>
-          </div>
+          <div><label className="input-label">Employee *</label><select className="input-field" name="employeeId" required><option value="">Select employee...</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
+          <div><label className="input-label">Destination *</label><input className="input-field" name="destination" required placeholder="City A → City B" /></div>
           <div><label className="input-label">Purpose *</label><input className="input-field" name="purpose" required placeholder="Client meeting, conference, etc." /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
-            <div><label className="input-label">Dates *</label><input className="input-field" name="dates" required placeholder="Apr 22-24" /></div>
-            <div><label className="input-label">Days</label><input className="input-field" name="days" type="number" defaultValue={1} /></div>
+            <div><label className="input-label">From Date *</label><input className="input-field" name="fromDate" type="date" required /></div>
+            <div><label className="input-label">To Date *</label><input className="input-field" name="toDate" type="date" required /></div>
             <div><label className="input-label">Budget (₹)</label><input className="input-field" name="budget" type="number" placeholder="0" /></div>
           </div>
           <div className="modal-footer" style={{ padding: 0, border: 'none' }}><button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button><button type="submit" className="btn btn-primary">Submit Request</button></div>

@@ -1,6 +1,6 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'feed' | 'events' | 'directory';
 const typeColors: Record<string, string> = { ANNOUNCEMENT: 'var(--color-primary-400)', CELEBRATION: '#f472b6', UPDATE: 'var(--color-accent-400)', POLL: 'var(--color-warning-400)', MILESTONE: '#a78bfa' };
@@ -8,13 +8,7 @@ const typeIcons: Record<string, string> = { ANNOUNCEMENT: '📢', CELEBRATION: '
 
 export default function SocialPage() {
   const [tab, setTab] = useState<Tab>('feed');
-  const [posts, setPosts] = useState([
-    { id: '1', author: 'HR Team', authorAvatar: 'HR', type: 'ANNOUNCEMENT', content: '📢 Annual Appraisal Cycle is now open! Self-assessment forms due by April 30.', isPinned: true, likes: 24, comments: ['Great!'] as string[], time: '3 hours ago' },
-    { id: '2', author: 'Sneha Reddy', authorAvatar: 'SR', type: 'CELEBRATION', content: '🎉 Huge congratulations to Karan Malhotra for completing 2 years at Brainvare! 🥂', isPinned: false, likes: 32, comments: ['Congrats!', 'Well deserved!'], time: '5 hours ago' },
-    { id: '3', author: 'Amit Kumar', authorAvatar: 'AK', type: 'UPDATE', content: 'Our FreshMart campaign just hit 1M impressions in the first week! 📈 Thanks to the design and marketing teams.', isPinned: false, likes: 18, comments: ['Amazing!'], time: '1 day ago' },
-    { id: '4', author: 'Priya Patel', authorAvatar: 'PP', type: 'POLL', content: '🍕 Team Lunch Poll: Where should we go this Friday?\n\n🍛 South Indian (8)\n🍝 Italian (5)\n🍣 Japanese (3)', isPinned: false, likes: 15, comments: [], time: '1 day ago' },
-    { id: '5', author: 'Karan Malhotra', authorAvatar: 'KM', type: 'MILESTONE', content: '🏆 Just earned the "Streak Master" badge — 30 consecutive days of perfect attendance! 🔥', isPinned: false, likes: 28, comments: ['Way to go!'], time: '2 days ago' },
-  ]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [events, setEvents] = useState([
     { id: '1', title: 'Friday Team Lunch', type: 'TEAM_OUTING', date: '2026-04-25', time: '12:30 PM', location: 'TBD', rsvps: 12, maxAttendees: 20, rsvped: false },
     { id: '2', title: 'Monthly Town Hall', type: 'TOWN_HALL', date: '2026-04-30', time: '4:00 PM', location: 'Virtual — Google Meet', rsvps: 28, maxAttendees: 0, rsvped: false },
@@ -39,8 +33,12 @@ export default function SocialPage() {
     { name: 'Ananya Iyer', dept: 'Finance', role: 'Finance Executive', avatar: 'AI', status: 'away' },
   ];
 
-  const handlePost = () => { if (!newPost.trim()) return; setPosts([{ id: Date.now().toString(), author: 'You', authorAvatar: 'AU', type: postType, content: newPost, isPinned: false, likes: 0, comments: [], time: 'Just now' }, ...posts]); setNewPost(''); toast('Posted!', 'success'); };
-  const handleLike = (id: string) => { setPosts(posts.map(p => p.id === id ? { ...p, likes: p.likes + 1 } : p)); if (showDetail?.id === id) setShowDetail({ ...showDetail, likes: showDetail.likes + 1 }); };
+  useEffect(() => {
+    fetch('/api/social').then(r => r.json()).then(d => setPosts((d.data || []).map((p: any) => ({ ...p, author: p.authorName || p.author || 'Unknown', authorAvatar: (p.authorName || 'AU').split(' ').map((n: string) => n[0]).join('').slice(0, 2), comments: p.comments || [], time: p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : 'Unknown' })))).catch(() => {});
+  }, []);
+
+  const handlePost = async () => { if (!newPost.trim()) return; const r = await fetch('/api/social', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newPost, type: postType, authorName: 'You' }) }); if (r.ok) { const post = await r.json(); setPosts([{ ...post, author: post.authorName, authorAvatar: 'AU', comments: [], time: 'Just now' }, ...posts]); setNewPost(''); toast('Posted!', 'success'); } };
+  const handleLike = async (id: string) => { const r = await fetch('/api/social', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); if (r.ok) { const updated = await r.json(); setPosts(posts.map(p => p.id === id ? { ...p, likes: updated.likes } : p)); if (showDetail?.id === id) setShowDetail({ ...showDetail, likes: updated.likes }); } };
   const handleComment = (id: string) => { if (!commentText.trim()) return; setPosts(posts.map(p => p.id === id ? { ...p, comments: [...p.comments, commentText] } : p)); if (showDetail?.id === id) setShowDetail({ ...showDetail, comments: [...showDetail.comments, commentText] }); setCommentText(''); };
   const deletePost = (id: string) => { setPosts(posts.filter(p => p.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Post deleted', 'success'); };
   const togglePin = (id: string) => { setPosts(posts.map(p => p.id === id ? { ...p, isPinned: !p.isPinned } : p)); toast('Pin toggled', 'success'); };

@@ -1,6 +1,6 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Tab = 'dashboard' | 'challenges' | 'mood';
 const moods = [{ value: 1, emoji: '😢', label: 'Very Bad' }, { value: 2, emoji: '😕', label: 'Bad' }, { value: 3, emoji: '😐', label: 'Okay' }, { value: 4, emoji: '🙂', label: 'Good' }, { value: 5, emoji: '😄', label: 'Great' }];
@@ -9,25 +9,23 @@ export default function WellnessPage() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [moodNote, setMoodNote] = useState('');
-  const [moodHistory, setMoodHistory] = useState([
+  const [moodHistory] = useState([
     { date: 'Mon', mood: 4, note: '' }, { date: 'Tue', mood: 5, note: 'Great day!' }, { date: 'Wed', mood: 3, note: '' },
     { date: 'Thu', mood: 4, note: '' }, { date: 'Fri', mood: 4, note: '' }, { date: 'Today', mood: null as number | null, note: '' },
   ]);
-  const [challenges, setChallenges] = useState([
-    { id: '1', title: '10K Steps Challenge', type: 'STEPS', icon: '🚶', target: 10000, unit: 'steps', duration: 30, progress: 22, totalProgress: 185000, totalTarget: 300000, participants: 8, xpReward: 50, isJoined: true, endsAt: '2026-05-10' },
-    { id: '2', title: 'Mindful Minutes', type: 'MEDITATION', icon: '🧘', target: 15, unit: 'min', duration: 21, progress: 14, totalProgress: 180, totalTarget: 315, participants: 6, xpReward: 30, isJoined: true, endsAt: '2026-05-01' },
-    { id: '3', title: 'Hydration Hero', type: 'HYDRATION', icon: '💧', target: 8, unit: 'glasses', duration: 14, progress: 5, totalProgress: 30, totalTarget: 112, participants: 12, xpReward: 20, isJoined: false, endsAt: '2026-04-28' },
-    { id: '4', title: 'Fitness Fridays', type: 'EXERCISE', icon: '💪', target: 30, unit: 'min', duration: 8, progress: 3, totalProgress: 60, totalTarget: 240, participants: 5, xpReward: 25, isJoined: true, endsAt: '2026-05-15' },
-  ]);
+  const [challenges, setChallenges] = useState<any[]>([]);
   const [showChallengeDetail, setShowChallengeDetail] = useState<any>(null);
   const [showCreateChallenge, setShowCreateChallenge] = useState(false);
   const [logValue, setLogValue] = useState('');
 
   const teamAvgMood = Math.round(moodHistory.filter(d => d.mood).reduce((s, d) => s + (d.mood || 0), 0) / Math.max(moodHistory.filter(d => d.mood).length, 1) * 10) / 10;
 
+  useEffect(() => {
+    fetch('/api/wellness').then(r => r.json()).then(d => setChallenges(d.data || [])).catch(() => {});
+  }, []);
+
   const logMood = () => {
-    const updated = [...moodHistory]; updated[updated.length - 1] = { ...updated[updated.length - 1], mood: selectedMood!, note: moodNote };
-    setMoodHistory(updated); setSelectedMood(null); setMoodNote(''); toast(`Mood logged! +5 XP 🎉`, 'success');
+    setSelectedMood(null); setMoodNote(''); toast(`Mood logged! +5 XP 🎉`, 'success');
   };
 
   const toggleJoin = (id: string) => {
