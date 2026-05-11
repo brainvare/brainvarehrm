@@ -1,5 +1,5 @@
 [build]
-  command = "cd ../.. && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate --schema=./prisma/schema.prisma && npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss && pnpm run build"
+  command = "cd ../.. && pnpm install --no-frozen-lockfile && cd apps/web && npx prisma generate --schema=./prisma/schema.prisma && pnpm run build"
   publish = ".next"
   base = "apps/web"
 
