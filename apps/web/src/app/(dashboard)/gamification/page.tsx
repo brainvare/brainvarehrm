@@ -1,7 +1,7 @@
 'use client';
 import toast from '@/lib/toast';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './gamification.module.css';
 
 const mockLevel = { level: 12, title: 'Champion', totalXp: 2680, nextLevelXp: 3000, streakDays: 15, longestStreak: 42 };
@@ -81,10 +81,21 @@ export default function GamificationPage() {
   const [tab, setTab] = useState<'overview' | 'badges' | 'leaderboard' | 'quests' | 'rewards'>('overview');
   const [lbPeriod, setLbPeriod] = useState('MONTHLY');
   const [badgeFilter, setBadgeFilter] = useState('ALL');
+  const [level, setLevel] = useState<any>(mockLevel);
+  const [badges, setBadges] = useState<any[]>(mockBadges);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
-  const earnedBadges = mockBadges.filter(b => b.earned);
-  const inProgressBadges = mockBadges.filter(b => !b.earned);
-  const xpProgress = ((mockLevel.totalXp % 1000) / 1000) * 100;
+  useEffect(() => {
+    fetch('/api/gamification').then(r => r.json()).then(d => {
+      if (d.user) setLevel({ level: d.user.level, title: 'Rising Star', totalXp: d.user.xp, nextLevelXp: d.user.level * 1000, streakDays: d.user.streak, longestStreak: d.user.streak });
+      if (d.badges?.length) setBadges(d.badges.map((b: any) => ({ ...b, xp: b.xpReward || 0 })));
+      if (d.leaderboard?.length) setLeaderboard(d.leaderboard);
+    }).catch(() => {});
+  }, []);
+
+  const earnedBadges = badges.filter(b => b.earned);
+  const inProgressBadges = badges.filter(b => !b.earned);
+  const xpProgress = ((level.totalXp % 1000) / 1000) * 100;
 
   return (
     <div className={styles.page}>
@@ -201,7 +212,7 @@ export default function GamificationPage() {
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>🏆 Top Performers</h2>
             <div className={styles.lbPreview}>
-              {mockLeaderboard.slice(0, 5).map(p => (
+              {(leaderboard.length ? leaderboard : mockLeaderboard).slice(0, 5).map((p: any) => (
                 <div key={p.rank} className={styles.lbPreviewItem} data-highlight={p.name === 'Rahul Sharma'}>
                   <span className={styles.lbPreviewRank}>{p.rank <= 3 ? ['🥇','🥈','🥉'][p.rank - 1] : `#${p.rank}`}</span>
                   <div className={styles.lbPreviewAvatar}>{p.avatar}</div>
@@ -274,7 +285,7 @@ export default function GamificationPage() {
             ))}
           </div>
           <div className={styles.podium}>
-            {mockLeaderboard.slice(0, 3).map((p, i) => (
+            {(leaderboard.length ? leaderboard : mockLeaderboard).slice(0, 3).map((p: any, i: number) => (
               <div key={p.rank} className={styles.podiumItem} data-position={i + 1}>
                 <div className={styles.podiumAvatar}>{p.avatar}</div>
                 <span className={styles.podiumMedal}>{['🥇','🥈','🥉'][i]}</span>
@@ -285,7 +296,7 @@ export default function GamificationPage() {
             ))}
           </div>
           <div className={styles.lbTable}>
-            {mockLeaderboard.map((p, i) => (
+            {(leaderboard.length ? leaderboard : mockLeaderboard).map((p: any, i: number) => (
               <div key={p.rank} className={styles.lbRow} data-highlight={p.name === 'Rahul Sharma'} style={{ animationDelay: `${i * 40}ms` }}>
                 <span className={styles.lbRank}>{p.rank}</span>
                 <div className={styles.lbAvatar}>{p.avatar}</div>

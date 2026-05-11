@@ -1,6 +1,6 @@
 'use client';
 import toast from '@/lib/toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const statusStyles: Record<string, { label: string; bg: string; color: string; icon: string }> = {
   PENDING: { label: 'Pending', bg: 'rgba(245,158,11,0.12)', color: 'var(--color-warning-400)', icon: '⏳' },
@@ -11,15 +11,8 @@ const statusStyles: Record<string, { label: string; bg: string; color: string; i
 const categories = ['All', 'Travel', 'Training', 'Meals', 'Equipment', 'Transport', 'Software', 'Miscellaneous'];
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState([
-    { id: 'EXP-001', title: 'Client Meeting — Travel to Bangalore', category: 'Travel', amount: 12500, date: '2026-04-15', status: 'PENDING', submittedBy: 'Rohit Mehta', receipts: 3, notes: 'Flight + cab + meals' },
-    { id: 'EXP-002', title: 'AWS Summit Conference Registration', category: 'Training', amount: 5000, date: '2026-04-10', status: 'APPROVED', submittedBy: 'Amit Kumar', receipts: 1, notes: '' },
-    { id: 'EXP-003', title: 'Team Lunch — Q1 Celebration', category: 'Meals', amount: 8200, date: '2026-04-08', status: 'APPROVED', submittedBy: 'Priya Patel', receipts: 1, notes: '' },
-    { id: 'EXP-004', title: 'Logitech Webcam — WFH Setup', category: 'Equipment', amount: 4500, date: '2026-04-05', status: 'REIMBURSED', submittedBy: 'Kavya Nair', receipts: 1, notes: '' },
-    { id: 'EXP-005', title: 'Uber — Late Night Shift', category: 'Transport', amount: 850, date: '2026-04-03', status: 'REJECTED', submittedBy: 'Arjun Desai', receipts: 1, notes: 'Missing approval for late shift' },
-    { id: 'EXP-006', title: 'Figma Annual License', category: 'Software', amount: 15000, date: '2026-03-28', status: 'REIMBURSED', submittedBy: 'Megha Joshi', receipts: 1, notes: '' },
-    { id: 'EXP-007', title: 'Office Supplies — Stationery', category: 'Miscellaneous', amount: 2100, date: '2026-03-25', status: 'PENDING', submittedBy: 'Vikram Singh', receipts: 2, notes: 'Pens, notebooks, markers' },
-  ]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [catFilter, setCatFilter] = useState('All');
   const [showCreate, setShowCreate] = useState(false);
@@ -28,13 +21,18 @@ export default function ExpensesPage() {
   const [editData, setEditData] = useState<any>({});
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
 
-  const filtered = expenses.filter(e => { if (statusFilter !== 'ALL' && e.status !== statusFilter) return false; if (catFilter !== 'All' && e.category !== catFilter) return false; return true; });
-  const totals = { pending: expenses.filter(e => e.status === 'PENDING').reduce((s, e) => s + e.amount, 0), approved: expenses.filter(e => e.status === 'APPROVED').reduce((s, e) => s + e.amount, 0), reimbursed: expenses.filter(e => e.status === 'REIMBURSED').reduce((s, e) => s + e.amount, 0), total: expenses.reduce((s, e) => s + e.amount, 0) };
+  useEffect(() => {
+    fetch('/api/expenses').then(r => r.json()).then(d => setExpenses((d.data || []).map((e: any) => ({ ...e, title: e.title || e.description, submittedBy: e.employee ? `${e.employee.firstName} ${e.employee.lastName}` : (e.submittedBy || 'Unknown') })))).catch(() => {});
+    fetch('/api/master-data').then(r => r.json()).then(d => setEmployees(d.employees || [])).catch(() => {});
+  }, []);
 
-  const handleCreate = (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; setExpenses([{ id: `EXP-${String(expenses.length + 1).padStart(3, '0')}`, title: (f.elements.namedItem('title') as HTMLInputElement).value, category: (f.elements.namedItem('category') as HTMLSelectElement).value, amount: parseInt((f.elements.namedItem('amount') as HTMLInputElement).value) || 0, date: (f.elements.namedItem('date') as HTMLInputElement).value || new Date().toISOString().split('T')[0], status: 'PENDING', submittedBy: 'You', receipts: 1, notes: (f.elements.namedItem('notes') as HTMLTextAreaElement).value }, ...expenses]); setShowCreate(false); toast('Expense submitted!', 'success'); };
-  const saveEdits = () => { setExpenses(expenses.map(ex => ex.id === showDetail.id ? { ...ex, ...editData, amount: parseInt(editData.amount) || ex.amount } : ex)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); };
+  const filtered = expenses.filter(e => { if (statusFilter !== 'ALL' && e.status !== statusFilter) return false; if (catFilter !== 'All' && e.category !== catFilter) return false; return true; });
+  const totals = { pending: expenses.filter(e => e.status === 'PENDING').reduce((s, e) => s + (e.amount || 0), 0), approved: expenses.filter(e => e.status === 'APPROVED').reduce((s, e) => s + (e.amount || 0), 0), reimbursed: expenses.filter(e => e.status === 'REIMBURSED').reduce((s, e) => s + (e.amount || 0), 0), total: expenses.reduce((s, e) => s + (e.amount || 0), 0) };
+
+  const handleCreate = async (e: any) => { e.preventDefault(); const f = e.target as HTMLFormElement; const r = await fetch('/api/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employeeId: (f.elements.namedItem('employeeId') as HTMLSelectElement).value, title: (f.elements.namedItem('title') as HTMLInputElement).value, category: (f.elements.namedItem('category') as HTMLSelectElement).value, amount: parseFloat((f.elements.namedItem('amount') as HTMLInputElement).value) || 0, date: (f.elements.namedItem('date') as HTMLInputElement).value || new Date().toISOString().split('T')[0], notes: (f.elements.namedItem('notes') as HTMLTextAreaElement).value }) }); if (r.ok) { const ex = await r.json(); setExpenses([{ ...ex, title: ex.title || ex.description, submittedBy: ex.employee ? `${ex.employee.firstName} ${ex.employee.lastName}` : 'You' }, ...expenses]); setShowCreate(false); toast('Expense submitted!', 'success'); } else toast('Failed', 'error'); };
+  const saveEdits = async () => { const r = await fetch('/api/expenses', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: showDetail.id, status: editData.status }) }); if (r.ok) { const updated = await r.json(); setExpenses(expenses.map(ex => ex.id === updated.id ? { ...updated, title: updated.title || updated.description, submittedBy: showDetail.submittedBy } : ex)); setShowDetail({ ...showDetail, ...editData }); setEditing(false); toast('Updated!', 'success'); } };
   const deleteExpense = (id: string) => { setExpenses(expenses.filter(e => e.id !== id)); setShowDetail(null); setDeleteConfirm(null); toast('Expense deleted', 'success'); };
-  const changeStatus = (id: string, status: string) => { setExpenses(expenses.map(e => e.id === id ? { ...e, status } : e)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`Status → ${statusStyles[status]?.label || status}`, 'success'); };
+  const changeStatus = async (id: string, status: string) => { const r = await fetch('/api/expenses', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); if (r.ok) { setExpenses(expenses.map(e => e.id === id ? { ...e, status } : e)); if (showDetail?.id === id) setShowDetail({ ...showDetail, status }); toast(`Status → ${statusStyles[status]?.label || status}`, 'success'); } };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', animation: 'fadeIn 0.3s ease' }}>
@@ -85,6 +83,7 @@ export default function ExpensesPage() {
       {showCreate && <div className="modal-overlay" onClick={() => setShowCreate(false)}><div className="modal-content" style={{ maxWidth: 550 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h2>Submit Expense Claim</h2><button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button></div>
         <form className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleCreate}>
+          <div><label className="input-label">Employee *</label><select className="input-field" name="employeeId" required><option value="">Select employee...</option>{employees.map((e: any) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
           <div><label className="input-label">Title *</label><input className="input-field" name="title" required placeholder="e.g. Client meeting travel" /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div><label className="input-label">Category</label><select className="input-field" name="category"><option>Travel</option><option>Training</option><option>Meals</option><option>Equipment</option><option>Transport</option><option>Software</option><option>Miscellaneous</option></select></div>
