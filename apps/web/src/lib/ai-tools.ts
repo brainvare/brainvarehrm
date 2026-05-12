@@ -335,6 +335,104 @@ export const aiToolDeclarations: FunctionDeclaration[] = [
     } as any,
   },
   {
+    name: 'create_employee',
+    description: 'Onboard a new employee. Auto-generates employee code if not provided.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        firstName: { type: SchemaType.STRING },
+        lastName: { type: SchemaType.STRING },
+        email: { type: SchemaType.STRING },
+        phone: { type: SchemaType.STRING },
+        department: { type: SchemaType.STRING, description: 'Department name or code' },
+        designation: { type: SchemaType.STRING, description: 'Designation title (e.g. "Senior Developer")' },
+        dateOfJoining: { type: SchemaType.STRING, description: 'YYYY-MM-DD. Defaults to today.' },
+        employmentType: { type: SchemaType.STRING, description: 'FULL_TIME, PART_TIME, CONTRACT, INTERN' },
+        workMode: { type: SchemaType.STRING, description: 'OFFICE, REMOTE, HYBRID' },
+      },
+      required: ['firstName', 'lastName', 'email'],
+    } as any,
+  },
+  {
+    name: 'update_employee_status',
+    description: 'Change an employee\'s employment status (e.g. confirm probation, mark resigned, terminate, set notice period).',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        employeeQuery: { type: SchemaType.STRING },
+        status: { type: SchemaType.STRING, description: 'ACTIVE, PROBATION, NOTICE_PERIOD, RESIGNED, TERMINATED, ALUMNUS' },
+        dateOfExit: { type: SchemaType.STRING, description: 'YYYY-MM-DD, set for RESIGNED/TERMINATED/ALUMNUS' },
+      },
+      required: ['employeeQuery', 'status'],
+    } as any,
+  },
+  {
+    name: 'create_department',
+    description: 'Create a new department.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        name: { type: SchemaType.STRING },
+        code: { type: SchemaType.STRING, description: '2-5 letter code, e.g. ENG, HR, FIN' },
+      },
+      required: ['name', 'code'],
+    } as any,
+  },
+  {
+    name: 'create_holiday',
+    description: 'Add a holiday to the company calendar.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        name: { type: SchemaType.STRING },
+        date: { type: SchemaType.STRING, description: 'YYYY-MM-DD' },
+        type: { type: SchemaType.STRING, description: 'NATIONAL, REGIONAL, RESTRICTED, COMPANY' },
+      },
+      required: ['name', 'date'],
+    } as any,
+  },
+  {
+    name: 'apply_leave',
+    description: 'Apply for leave on behalf of an employee.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        employeeQuery: { type: SchemaType.STRING },
+        leaveType: { type: SchemaType.STRING, description: 'Leave type name (e.g. Casual, Sick, Earned)' },
+        startDate: { type: SchemaType.STRING, description: 'YYYY-MM-DD' },
+        endDate: { type: SchemaType.STRING, description: 'YYYY-MM-DD' },
+        reason: { type: SchemaType.STRING },
+      },
+      required: ['employeeQuery', 'leaveType', 'startDate', 'endDate'],
+    } as any,
+  },
+  {
+    name: 'create_position',
+    description: 'Open a new hiring position / headcount.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        title: { type: SchemaType.STRING },
+        department: { type: SchemaType.STRING },
+        location: { type: SchemaType.STRING },
+        type: { type: SchemaType.STRING, description: 'FULL_TIME, PART_TIME, CONTRACT' },
+        openings: { type: SchemaType.NUMBER, description: 'Number of openings, default 1' },
+        description: { type: SchemaType.STRING },
+      },
+      required: ['title'],
+    } as any,
+  },
+  {
+    name: 'list_positions',
+    description: 'List all open hiring positions.',
+    parameters: { type: SchemaType.OBJECT, properties: {} } as any,
+  },
+  {
+    name: 'list_holidays',
+    description: 'List company holidays for the current year.',
+    parameters: { type: SchemaType.OBJECT, properties: {} } as any,
+  },
+  {
     name: 'log_overtime',
     description: 'Log an overtime entry for an employee.',
     parameters: {
@@ -675,6 +773,118 @@ export const aiToolHandlers: Record<string, ToolHandler> = {
       },
     });
     return { ok: true, id: t.id, destination };
+  },
+
+  create_employee: async ({ firstName, lastName, email, phone, department, designation, dateOfJoining, employmentType, workMode }) => {
+    const orgId = await org();
+    let departmentId: string | undefined;
+    let designationId: string | undefined;
+    if (department) {
+      const d = await prisma.department.findFirst({
+        where: { organizationId: orgId, OR: [{ name: { contains: department, mode: 'insensitive' } }, { code: { equals: department, mode: 'insensitive' } }] },
+      });
+      departmentId = d?.id;
+    }
+    if (designation) {
+      const ds = await prisma.designation.findFirst({
+        where: { organizationId: orgId, title: { contains: designation, mode: 'insensitive' } },
+      });
+      designationId = ds?.id;
+    }
+    const last = await prisma.employee.findFirst({ orderBy: { employeeCode: 'desc' }, select: { employeeCode: true } });
+    const nextNum = last ? (parseInt(last.employeeCode.replace(/\D/g, '')) || 0) + 1 : 1;
+    const code = `EMP-${String(nextNum).padStart(4, '0')}`;
+    const emp = await prisma.employee.create({
+      data: {
+        firstName, lastName, email,
+        employeeCode: code, phone,
+        organizationId: orgId,
+        departmentId, designationId,
+        dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : new Date(),
+        employmentType: employmentType || 'FULL_TIME',
+        workMode: workMode || 'OFFICE',
+        employmentStatus: 'ACTIVE',
+      },
+    });
+    return { ok: true, id: emp.id, code: emp.employeeCode, name: `${emp.firstName} ${emp.lastName}` };
+  },
+
+  update_employee_status: async ({ employeeQuery, status, dateOfExit }) => {
+    const emp = await findEmployee(employeeQuery);
+    if (!emp) return { error: `Employee not found: ${employeeQuery}` };
+    const data: any = { employmentStatus: status };
+    if (dateOfExit) data.dateOfExit = new Date(dateOfExit);
+    const updated = await prisma.employee.update({ where: { id: emp.id }, data });
+    return { ok: true, id: updated.id, status: updated.employmentStatus };
+  },
+
+  create_department: async ({ name, code }) => {
+    const orgId = await org();
+    const d = await prisma.department.create({ data: { name, code, organizationId: orgId } });
+    return { ok: true, id: d.id, name: d.name, code: d.code };
+  },
+
+  create_holiday: async ({ name, date, type }) => {
+    const orgId = await org();
+    const map: Record<string, string> = { NATIONAL: 'MANDATORY', REGIONAL: 'OPTIONAL', RESTRICTED: 'RESTRICTED', COMPANY: 'MANDATORY' };
+    const h = await prisma.holiday.create({
+      data: { name, date: new Date(date), type: map[type || ''] || type || 'MANDATORY', organizationId: orgId },
+    });
+    return { ok: true, id: h.id, name: h.name, date: h.date };
+  },
+
+  list_holidays: async () => {
+    const orgId = await org();
+    const year = new Date().getFullYear();
+    return prisma.holiday.findMany({
+      where: {
+        organizationId: orgId,
+        date: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) },
+      },
+      orderBy: { date: 'asc' },
+    });
+  },
+
+  apply_leave: async ({ employeeQuery, leaveType, startDate, endDate, reason }) => {
+    const emp = await findEmployee(employeeQuery);
+    if (!emp) return { error: `Employee not found: ${employeeQuery}` };
+    const orgId = await org();
+    const lt = await prisma.leaveType.findFirst({
+      where: { organizationId: orgId, name: { contains: leaveType, mode: 'insensitive' } },
+    });
+    if (!lt) return { error: `Leave type not found: ${leaveType}` };
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    const tx = await prisma.leaveTransaction.create({
+      data: {
+        employeeId: emp.id, leaveTypeId: lt.id,
+        startDate: start, endDate: end, days,
+        reason: reason || '', status: 'PENDING',
+      },
+    });
+    return { ok: true, id: tx.id, days, status: tx.status };
+  },
+
+  create_position: async ({ title, department, location, type, openings, description }) => {
+    const orgId = await org();
+    const p = await prisma.position.create({
+      data: {
+        title,
+        departmentName: department,
+        locationName: location,
+        jobType: type || 'FULL_TIME',
+        headcount: openings || 1,
+        description,
+        organizationId: orgId,
+      },
+    });
+    return { ok: true, id: p.id, title: p.title };
+  },
+
+  list_positions: async () => {
+    const orgId = await org();
+    return prisma.position.findMany({ where: { organizationId: orgId }, orderBy: { createdAt: 'desc' }, take: 50 });
   },
 
   log_overtime: async ({ employeeQuery, hours, rate, reason }) => {

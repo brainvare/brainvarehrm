@@ -882,3 +882,22 @@ model EmployeeLevel {
   rank           Int?
   updatedAt      DateTime     @updatedAt
 }
+
+// ─────────────────────────────────────
+// Generic Key-Value store for modules without dedicated schemas
+// (workflows, projects, skills, training, performance, goals,
+//  freelancers, recruitment, career, succession, compensation,
+//  timesheets, cases, notifications)
+// ─────────────────────────────────────
+model KvRecord {
+  id             String   @id @default(cuid())
+  organizationId String?
+  namespace      String   // e.g. "workflow", "project", "skill"
+  recordKey      String?  // optional secondary key for upserts
+  data           String   // JSON-stringified payload
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, namespace])
+  @@index([namespace, recordKey])
+}

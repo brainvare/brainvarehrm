@@ -67,6 +67,18 @@ export default function AIAssistant() {
         setMessages(prev => [...prev, { role: 'assistant', content: errorMsg, timestamp: new Date() }]);
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: new Date(), actions: data.actions }]);
+        // Fire global refresh event if any tool performed a write/mutation
+        const didWrite = (data.actions || []).some((a: Action) =>
+          a.tool.startsWith('create_') || a.tool.startsWith('update_') ||
+          a.tool.startsWith('approve_') || a.tool.startsWith('reject_') ||
+          a.tool.startsWith('assign_') || a.tool === 'give_recognition' ||
+          a.tool === 'award_xp' || a.tool === 'apply_leave' ||
+          a.tool === 'post_social' || a.tool === 'log_overtime' ||
+          a.tool === 'resolve_helpdesk_ticket'
+        );
+        if (didWrite) {
+          window.dispatchEvent(new CustomEvent('ai-data-changed'));
+        }
       }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Network error. Please try again.', timestamp: new Date() }]);

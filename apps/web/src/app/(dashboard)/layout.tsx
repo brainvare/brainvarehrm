@@ -16,6 +16,7 @@ export default function DashboardLayout({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -40,6 +41,16 @@ export default function DashboardLayout({
   useEffect(() => {
     setMobileSidebarOpen(false);
   }, [pathname]);
+
+  // Force-remount the page content when AI mutates anything, so client pages re-fetch
+  useEffect(() => {
+    const handler = () => {
+      setRefreshKey(k => k + 1);
+      router.refresh();
+    };
+    window.addEventListener('ai-data-changed', handler);
+    return () => window.removeEventListener('ai-data-changed', handler);
+  }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -76,7 +87,7 @@ export default function DashboardLayout({
           onLogout={handleLogout}
         />
 
-        <main className={styles.content}>
+        <main className={styles.content} key={`${pathname}-${refreshKey}`}>
           {children}
         </main>
       </div>
