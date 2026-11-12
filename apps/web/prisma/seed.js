@@ -138,6 +138,51 @@ async function main() {
     { firstName: 'Ravi', lastName: 'Kumar', email: 'ravi@brainvare.com', phone: '+91 98765 43219', gender: 'MALE', dateOfBirth: '1998-08-20', dateOfJoining: '2026-04-28', designation: 'Jr. Developer', grade: 'L1 — Entry', dept: 'ENG', empStatus: 'PROBATION', empType: 'FULL_TIME', workMode: 'OFFICE', pan: 'BCDPN7890J', bank: 'HDFC Bank', bankAcc: '50100011111111', bankIfsc: 'HDFC0001111' },
   ];
 
+  // ─── Generate 95 more synthetic employees for a 105-person org ───
+  const firstNamesM = ['Aakash','Aarav','Abhishek','Aditya','Ajay','Akhil','Aman','Aniket','Anirudh','Anuj','Arjun','Arpit','Arvind','Ashish','Ayush','Bharat','Chirag','Devansh','Dhruv','Divyansh','Gaurav','Hardik','Harsh','Hemant','Ishaan','Jatin','Karan','Kunal','Lakshay','Manish','Mayank','Mohit','Naveen','Neeraj','Nikhil','Nitin','Parth','Piyush','Pranav','Prashant','Pratik','Praveen','Raghav','Rakesh','Rohan','Rohit','Sachin','Sahil','Sandeep','Sanjay','Saurabh','Shaurya','Shubham','Siddharth','Sumit','Suraj','Tarun','Tushar','Uday','Varun','Vibhor','Vijay','Vinay','Vishal','Vivek','Yash','Yogesh','Zubair','Imran','Faisal','Rohan','Aryan','Karthik'];
+  const firstNamesF = ['Aanya','Aditi','Aishwarya','Akshara','Ananya','Anjali','Anushka','Aparna','Aradhya','Arpita','Avani','Bhavna','Charvi','Chitra','Deepali','Diya','Divya','Esha','Gauri','Geet','Harini','Heena','Ipshita','Ishita','Jiya','Kajal','Kanika','Kavita','Kiara','Kriti','Lakshmi','Leela','Mahima','Mamta','Manisha','Maya','Meghna','Mitali','Nandini','Neha','Nikita','Nisha','Pallavi','Pooja','Prachi','Priti','Rachna','Radhika','Ragini','Rashmi','Rhea','Ria','Riya','Roshni','Sakshi','Sanya','Saumya','Shalini','Shivani','Shweta','Simran','Sonal','Sonia','Sunita','Suparna','Swati','Tanvi','Tara','Trisha','Vandana','Vidya','Vidisha','Yamini','Zara','Zoya','Ifrah','Mehek','Anika'];
+  const lastNames = ['Acharya','Agarwal','Aggarwal','Aiyar','Anand','Arora','Banerjee','Bhatia','Bhatt','Bhattacharya','Bose','Chakraborty','Chand','Chandra','Chatterjee','Chauhan','Chopra','Das','Dasgupta','Datta','Desai','Deshmukh','Deshpande','Dhawan','Dixit','Dubey','Dutta','Gandhi','Ganguly','Garg','Ghosh','Gill','Goel','Gokhale','Goswami','Goyal','Gupta','Hegde','Iyer','Iyengar','Jain','Jha','Joshi','Kapoor','Karthik','Khanna','Khatri','Khurana','Krishnan','Krishnamurthy','Kulkarni','Lal','Mahajan','Malhotra','Malik','Mathur','Mehra','Mehta','Menon','Mishra','Modi','Mukherjee','Nair','Nanda','Narayanan','Pandey','Pandit','Patel','Pillai','Pradhan','Prasad','Raghavan','Rajagopalan','Ramachandran','Rao','Rastogi','Reddy','Roy','Saha','Sahay','Saini','Sangal','Saxena','Sengupta','Sethi','Shah','Sharma','Shenoy','Shetty','Singh','Singhal','Singhania','Sinha','Sondhi','Sood','Sreenivasan','Srinivasan','Subramanian','Suri','Talwar','Taneja','Thakur','Tiwari','Trivedi','Varma','Verma','Vyas','Walia','Yadav'];
+
+  const designationList = Object.keys(designations);
+  const gradeList = Object.keys(grades);
+  const deptCodes = ['ENG','HR','DES','MKT','FIN','OPS'];
+  const banks = ['HDFC Bank','ICICI Bank','SBI','Axis Bank','Kotak'];
+  const ifsc = { 'HDFC Bank':'HDFC0001234','ICICI Bank':'ICIC0002345','SBI':'SBIN0003456','Axis Bank':'UTIB0004567','Kotak':'KKBK0006789' };
+  const workModes = ['OFFICE','REMOTE','HYBRID'];
+  const empTypes = ['FULL_TIME','FULL_TIME','FULL_TIME','CONTRACT','INTERN'];
+  const usedEmails = new Set(empData.map(e => e.email));
+  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const pad = (n, w) => String(n).padStart(w, '0');
+
+  for (let i = 0; i < 95; i++) {
+    const isMale = Math.random() < 0.55;
+    const fn = rand(isMale ? firstNamesM : firstNamesF);
+    const ln = rand(lastNames);
+    let email = `${fn.toLowerCase()}.${ln.toLowerCase()}@brainvare.com`;
+    let dedupe = 1;
+    while (usedEmails.has(email)) {
+      email = `${fn.toLowerCase()}.${ln.toLowerCase()}${dedupe}@brainvare.com`;
+      dedupe++;
+    }
+    usedEmails.add(email);
+    const dept = rand(deptCodes);
+    const designation = rand(designationList);
+    const grade = rand(gradeList);
+    const bank = rand(banks);
+    const status = Math.random() < 0.85 ? 'ACTIVE' : (Math.random() < 0.5 ? 'PROBATION' : 'NOTICE_PERIOD');
+    empData.push({
+      firstName: fn, lastName: ln, email,
+      phone: `+91 9${pad(Math.floor(Math.random() * 1e9), 9)}`,
+      gender: isMale ? 'MALE' : 'FEMALE',
+      dateOfBirth: `${1980 + Math.floor(Math.random() * 20)}-${pad(1 + Math.floor(Math.random() * 12), 2)}-${pad(1 + Math.floor(Math.random() * 28), 2)}`,
+      dateOfJoining: `${2020 + Math.floor(Math.random() * 6)}-${pad(1 + Math.floor(Math.random() * 12), 2)}-${pad(1 + Math.floor(Math.random() * 28), 2)}`,
+      designation, grade, dept, empStatus: status,
+      empType: rand(empTypes), workMode: rand(workModes),
+      pan: `${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}PN${pad(Math.floor(Math.random() * 10000), 4)}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
+      bank, bankAcc: `${Math.floor(Math.random() * 9e13) + 1e13}`, bankIfsc: ifsc[bank],
+    });
+  }
+
   const employees = [];
   for (let i = 0; i < empData.length; i++) {
     const e = empData[i];
@@ -173,7 +218,15 @@ async function main() {
   await prisma.employee.update({ where: { id: employees[6].id }, data: { reportingManagerId: employees[1].id } }); // Rahul → Sneha
   await prisma.employee.update({ where: { id: employees[8].id }, data: { reportingManagerId: employees[2].id } }); // Vikram → Karan
   await prisma.employee.update({ where: { id: employees[7].id }, data: { reportingManagerId: employees[3].id } }); // Deepika → Priya
-  console.log('✅ 10 employees created');
+  // Random reporting structure for synthetic hires (point each to one of the first 10)
+  for (let i = 10; i < employees.length; i++) {
+    const managerIdx = Math.floor(Math.random() * 10);
+    await prisma.employee.update({
+      where: { id: employees[i].id },
+      data: { reportingManagerId: employees[managerIdx].id },
+    });
+  }
+  console.log(`✅ ${employees.length} employees created`);
 
   // ─── Addresses ───
   for (const emp of employees) {
@@ -299,7 +352,7 @@ async function main() {
       }
     }
   }
-  console.log('✅ Attendance records created (20 days × 10 employees)');
+  console.log(`✅ Attendance records created (20 days × ${employees.length} employees)`);
 
   // ─── Salary Structures ───
   const salaryData = [

@@ -32,8 +32,20 @@
 .message[data-role='user'] .msgBubble { background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; border-bottom-right-radius: 4px; }
 .message[data-role='assistant'] .msgBubble { background: var(--bg-tertiary); color: var(--text-primary); border-bottom-left-radius: 4px; }
 .msgContent { word-break: break-word; }
-.msgContent code { font-size: 11px; background: rgba(0,0,0,0.1); padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); }
-.msgContent strong { font-weight: 600; }
+.msgContent p { margin: 0 0 8px; }
+.msgContent p:last-child { margin-bottom: 0; }
+.msgContent strong { font-weight: 600; color: var(--text-primary); }
+.msgContent em { font-style: italic; opacity: 0.9; }
+.msgContent h2 { font-size: 15px; font-weight: 700; margin: 8px 0 6px; }
+.msgContent h3 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; }
+.msgContent h4 { font-size: 12px; font-weight: 700; margin: 6px 0 4px; }
+.msgContent .mdList { margin: 4px 0 8px 18px; padding: 0; }
+.msgContent .mdList li { margin: 2px 0; }
+.msgContent a { color: #93c5fd; text-decoration: underline; }
+.msgContent .inlineCode { font-size: 11px; background: rgba(0,0,0,0.18); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); color: #fcd34d; }
+.msgContent .codeBlock { position: relative; margin: 8px 0; padding: 10px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow-x: auto; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: #e2e8f0; }
+.msgContent .codeBlock code { background: none; padding: 0; color: inherit; font-family: inherit; font-size: inherit; }
+.msgContent .codeBlockLang { display: inline-block; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px; padding: 1px 6px; background: rgba(148,163,184,0.12); border-radius: 4px; }
 .msgTime { font-size: 9px; color: var(--text-muted); margin-top: 2px; padding: 0 4px; }
 
 .typingIndicator { display: flex; gap: 4px; padding: 4px 0; }
@@ -50,10 +62,17 @@
 .sendBtn:hover:not(:disabled) { transform: scale(1.05); }
 .sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.actionsList { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-primary); }
-.actionItem { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; font-size: 11px; }
-.actionItem[data-error="true"] { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
-.actionTool { font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; }
-.actionResult { color: var(--text-tertiary); font-size: 10px; }
+.actionsList { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-primary); }
+.actionItem { background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(139,92,246,0.08)); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px; font-size: 11px; overflow: hidden; }
+.actionItem[data-error="true"] { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+.actionHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; cursor: pointer; user-select: none; }
+.actionHeader:hover { background: rgba(255,255,255,0.04); }
+.actionTool { font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.actionResult { color: var(--text-secondary); font-size: 10px; display: flex; align-items: center; gap: 6px; }
+.actionChevron { color: var(--text-muted); font-size: 9px; transition: transform 0.15s; }
+.actionChevron[data-open="true"] { transform: rotate(90deg); }
+.actionDetail { padding: 0 10px 8px; border-top: 1px solid rgba(255,255,255,0.06); }
+.actionDetail pre { margin: 6px 0 0; padding: 8px 10px; background: rgba(0,0,0,0.3); border-radius: 6px; font-size: 10px; line-height: 1.45; color: #cbd5e1; overflow-x: auto; max-height: 200px; white-space: pre-wrap; word-break: break-word; }
+.actionLabel { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-top: 6px; }
 
 @media (max-width: 480px) { .panel { width: calc(100vw - 16px); right: 8px; bottom: 80px; max-height: 70vh; } .fab { bottom: 16px; right: 16px; } }

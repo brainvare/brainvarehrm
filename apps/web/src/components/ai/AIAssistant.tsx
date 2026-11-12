@@ -148,16 +148,7 @@ export default function AIAssistant() {
                   {msg.actions && msg.actions.length > 0 && (
                     <div className={styles.actionsList}>
                       {msg.actions.map((a, j) => (
-                        <div key={j} className={styles.actionItem} data-error={!!a.result?.error}>
-                          <span className={styles.actionTool}>⚡ {a.tool}</span>
-                          <span className={styles.actionResult}>
-                            {a.result?.error
-                              ? `Error: ${a.result.error}`
-                              : Array.isArray(a.result)
-                                ? `${a.result.length} result(s)`
-                                : a.result?.ok ? '✓ Done' : 'Done'}
-                          </span>
-                        </div>
+                        <ActionChip key={j} action={a} />
                       ))}
                     </div>
                   )}
@@ -196,12 +187,110 @@ export default function AIAssistant() {
   );
 }
 
+function ActionChip({ action }: { action: Action }) {
+  const [open, setOpen] = useState(false);
+  const isError = !!action.result?.error;
+  const summary = isError
+    ? `Error: ${action.result.error}`
+    : Array.isArray(action.result)
+      ? `${action.result.length} result(s)`
+      : action.result?.ok ? '✓ Done' : 'Done';
+  return (
+    <div className={styles.actionItem} data-error={isError}>
+      <div className={styles.actionHeader} onClick={() => setOpen(o => !o)}>
+        <span className={styles.actionTool}>
+          <span className={styles.actionChevron} data-open={open}>▸</span>
+          ⚡ {action.tool}
+        </span>
+        <span className={styles.actionResult}>{summary}</span>
+      </div>
+      {open && (
+        <div className={styles.actionDetail}>
+          {action.args && Object.keys(action.args).length > 0 && (
+            <>
+              <div className={styles.actionLabel}>Input</div>
+              <pre>{JSON.stringify(action.args, null, 2)}</pre>
+            </>
+          )}
+          <div className={styles.actionLabel}>Output</div>
+          <pre>{JSON.stringify(action.result, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/^• /gm, '&bull; ')
-    .replace(/^- /gm, '&bull; ')
-    .replace(/\n/g, '<br/>');
+  // Pull out fenced code blocks first so they don't get mangled.
+  const codeBlocks: string[] = [];
+  let stripped = text.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const safe = escapeHtml(code.replace(/\n$/, ''));
+    const langTag = lang ? `<span class="codeBlockLang">${escapeHtml(lang)}</span>` : '';
+    codeBlocks.push(`<pre class="codeBlock">${langTag}<code>${safe}</code></pre>`);
+    return ` CODE${codeBlocks.length - 1} `;
+  });
+
+  // Escape the rest (now safe to do; placeholders are ASCII-safe)
+  stripped = escapeHtml(stripped);
+
+  // Inline code
+  stripped = stripped.replace(/`([^`]+?)`/g, '<code class="inlineCode">$1</code>');
+
+  // Bold + italic
+  stripped = stripped.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  stripped = stripped.replace(/(?<![\w*])\*([^*\n]+?)\*(?![\w*])/g, '<em>$1</em>');
+
+  // Headings
+  stripped = stripped
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+  // Links [text](url)
+  stripped = stripped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+
+  // Lists — group consecutive bullet lines into a <ul>
+  stripped = stripped.replace(/(?:^|\n)((?:[-*•] .+\n?)+)/g, (_, block: string) => {
+    const items = block
+      .trim()
+      .split('\n')
+      .map((l) => l.replace(/^[-*•]\s+/, ''))
+      .map((l) => `<li>${l}</li>`)
+      .join('');
+    return `\n<ul class="mdList">${items}</ul>`;
+  });
+
+  // Numbered lists
+  stripped = stripped.replace(/(?:^|\n)((?:\d+\.\s+.+\n?)+)/g, (_, block: string) => {
+    const items = block
+      .trim()
+      .split('\n')
+      .map((l) => l.replace(/^\d+\.\s+/, ''))
+      .map((l) => `<li>${l}</li>`)
+      .join('');
+    return `\n<ol class="mdList">${items}</ol>`;
+  });
+
+  // Paragraphs: split on blank lines, wrap remaining text
+  stripped = stripped
+    .split(/\n{2,}/)
+    .map((para) => {
+      if (/^\s*<(h\d|ul|ol|pre| )/.test(para)) return para;
+      return `<p>${para.replace(/\n/g, '<br/>')}</p>`;
+    })
+    .join('');
+
+  // Restore code blocks
+  stripped = stripped.replace(/ CODE(\d+) /g, (_, i) => codeBlocks[parseInt(i, 10)]);
+
+  return stripped;
 }

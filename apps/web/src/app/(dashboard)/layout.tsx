@@ -42,11 +42,14 @@ export default function DashboardLayout({
     setMobileSidebarOpen(false);
   }, [pathname]);
 
+  const [refreshFlash, setRefreshFlash] = useState(false);
   // Force-remount the page content when AI mutates anything, so client pages re-fetch
   useEffect(() => {
     const handler = () => {
       setRefreshKey(k => k + 1);
       router.refresh();
+      setRefreshFlash(true);
+      setTimeout(() => setRefreshFlash(false), 1800);
     };
     window.addEventListener('ai-data-changed', handler);
     return () => window.removeEventListener('ai-data-changed', handler);
@@ -101,6 +104,13 @@ export default function DashboardLayout({
 
       <MobileNav />
       <AIAssistant />
+
+      {refreshFlash && (
+        <div className={styles.refreshFlash}>
+          <span className={styles.refreshDot} />
+          AI updated your data — page refreshed
+        </div>
+      )}
     </div>
   );
 }
